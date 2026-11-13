@@ -27,7 +27,6 @@ import {
   getDoc,
   limit,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -42,8 +41,10 @@ interface NovaChatProps {
   user: User | null;
   myHandle: ChatHandle | null;
   handleLoading: boolean;
+  authError?: string | null;
   streamerMode: boolean;
   onSignIn: () => Promise<void>;
+  onSignInRedirect?: () => Promise<void>;
   onSignOut: () => Promise<void>;
   onRegisterHandle: (handle: string, displayName: string, color: string) => Promise<void>;
   onAwardXp: (amount: number, achievementKey?: string) => void;
@@ -56,8 +57,10 @@ export const NovaChat: React.FC<NovaChatProps> = ({
   user,
   myHandle,
   handleLoading,
+  authError,
   streamerMode,
   onSignIn,
+  onSignInRedirect,
   onSignOut,
   onRegisterHandle,
   onAwardXp,
@@ -150,7 +153,7 @@ export const NovaChat: React.FC<NovaChatProps> = ({
     };
   }, [user, myHandle]);
 
-  // Listen to Active Conversation Messages
+  // Listen to Active Conversation Messages (no composite index required — chronological sort in JS)
   useEffect(() => {
     if (!user || !myHandle) return;
 
@@ -159,26 +162,32 @@ export const NovaChat: React.FC<NovaChatProps> = ({
       const q = query(
         collection(db, path),
         where('isPublic', '==', true),
-        where('channelId', '==', activeTarget.id),
-        orderBy('createdAt', 'asc'),
-        limit(80)
+        limit(200)
       );
       const unsub = onSnapshot(
         q,
         (snap) => {
-          const items: ChatMessageItem[] = snap.docs.map((d) => {
-            const data = d.data();
-            const ts = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-            return {
-              id: d.id,
-              senderUid: data.senderUid,
-              senderHandle: data.senderHandle,
-              avatarColor: data.avatarColor,
-              text: data.text,
-              emojiReaction: data.emojiReaction,
-              time: ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-            };
-          });
+          const items = snap.docs
+            .map((d) => ({ id: d.id, data: d.data() }))
+            .filter(({ data }) => (data.channelId || 'squad') === activeTarget.id)
+            .sort((a, b) => {
+              const ta = a.data.createdAt?.toMillis ? a.data.createdAt.toMillis() : Number.MAX_SAFE_INTEGER;
+              const tb = b.data.createdAt?.toMillis ? b.data.createdAt.toMillis() : Number.MAX_SAFE_INTEGER;
+              return ta - tb;
+            })
+            .slice(-80)
+            .map(({ id, data }) => {
+              const ts = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+              return {
+                id,
+                senderUid: data.senderUid,
+                senderHandle: data.senderHandle,
+                avatarColor: data.avatarColor,
+                text: data.text,
+                emojiReaction: data.emojiReaction,
+                time: ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              } as ChatMessageItem;
+            });
           setMessages(items);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, path)
@@ -189,25 +198,31 @@ export const NovaChat: React.FC<NovaChatProps> = ({
       const q = query(
         collection(db, path),
         where('participants', 'array-contains', user.uid),
-        orderBy('createdAt', 'asc'),
-        limit(80)
+        limit(200)
       );
       const unsub = onSnapshot(
         q,
         (snap) => {
-          const items: ChatMessageItem[] = snap.docs.map((d) => {
-            const data = d.data();
-            const ts = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-            return {
-              id: d.id,
-              senderUid: data.senderUid,
-              senderHandle: data.senderHandle,
-              avatarColor: data.avatarColor,
-              text: data.text,
-              emojiReaction: data.emojiReaction,
-              time: ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-            };
-          });
+          const items = snap.docs
+            .map((d) => ({ id: d.id, data: d.data() }))
+            .sort((a, b) => {
+              const ta = a.data.createdAt?.toMillis ? a.data.createdAt.toMillis() : Number.MAX_SAFE_INTEGER;
+              const tb = b.data.createdAt?.toMillis ? b.data.createdAt.toMillis() : Number.MAX_SAFE_INTEGER;
+              return ta - tb;
+            })
+            .slice(-80)
+            .map(({ id, data }) => {
+              const ts = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+              return {
+                id,
+                senderUid: data.senderUid,
+                senderHandle: data.senderHandle,
+                avatarColor: data.avatarColor,
+                text: data.text,
+                emojiReaction: data.emojiReaction,
+                time: ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+              } as ChatMessageItem;
+            });
           setMessages(items);
         },
         (err) => handleFirestoreError(err, OperationType.LIST, path)
@@ -425,8 +440,9 @@ export const NovaChat: React.FC<NovaChatProps> = ({
 
   // Gate 1: Sign in required for Nova Chat Account
   if (!user) {
+    const currentHost = typeof window !== 'undefined' ? window.location.hostname : '';
     return (
-      <div className="h-full flex items-center justify-center p-6">
+      <div className="h-full flex items-center justify-center p-6 overflow-y-auto">
         <div className="max-w-md w-full p-7 rounded-xl border border-slate-800 bg-[#0D1320] text-center space-y-5">
           <div className="w-12 h-12 mx-auto rounded-xl border border-cyan-500/40 bg-cyan-500/10 flex items-center justify-center text-cyan-300">
             <Users className="w-6 h-6" />
@@ -439,14 +455,68 @@ export const NovaChat: React.FC<NovaChatProps> = ({
               Connectez-vous pour obtenir votre identifiant unique (@id), ajouter des amis par leur nom/ID et discuter en temps réel.
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="w-full flex items-center justify-center gap-2 h-11 px-5 rounded-lg bg-cyan-500 text-slate-950 text-sm font-bold hover:bg-cyan-400 transition-colors"
-          >
-            <LogIn className="w-4 h-4" />
-            <span>Se connecter avec Google</span>
-          </button>
+          <div className="space-y-2.5">
+            <button
+              type="button"
+              onClick={onSignIn}
+              className="w-full flex items-center justify-center gap-2 h-11 px-5 rounded-lg bg-cyan-500 text-slate-950 text-sm font-bold hover:bg-cyan-400 transition-colors"
+            >
+              <LogIn className="w-4 h-4" />
+              <span>Se connecter avec Google</span>
+            </button>
+            {onSignInRedirect && (
+              <button
+                type="button"
+                onClick={onSignInRedirect}
+                className="w-full h-9 px-4 rounded-lg border border-slate-700 bg-[#080C15] text-xs font-medium text-slate-300 hover:border-cyan-400/60 hover:text-cyan-200 transition-colors"
+              >
+                Connexion alternative (redirection)
+              </button>
+            )}
+          </div>
+
+          {authError === 'UNAUTHORIZED_DOMAIN' ? (
+            <div className="p-4 rounded-lg border border-amber-500/45 bg-amber-500/10 text-left space-y-2.5">
+              <div className="text-xs font-bold text-amber-300">
+                Domaine Vercel non autorisé dans Firebase Auth
+              </div>
+              <p className="text-[11px] text-slate-300 leading-relaxed">
+                Pour activer la connexion Google sur ce déploiement, ajoutez ce domaine dans{' '}
+                <span className="font-semibold text-white">
+                  Firebase Console → Authentication → Settings → Authorized domains
+                </span>{' '}
+                :
+              </p>
+              <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded bg-[#070B13] border border-slate-700">
+                <code className="text-[11px] font-mono-tabular text-cyan-300 truncate">
+                  {currentHost}
+                </code>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(currentHost);
+                    setCopiedId(true);
+                    window.setTimeout(() => setCopiedId(false), 2000);
+                  }}
+                  className="text-[11px] font-semibold text-cyan-300 hover:text-cyan-200 shrink-0"
+                >
+                  {copiedId ? 'Copié !' : 'Copier'}
+                </button>
+              </div>
+              <a
+                href="https://console.firebase.google.com/project/gen-lang-client-0373523970/authentication/settings"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-[11px] font-semibold text-amber-300 hover:underline"
+              >
+                Ouvrir Firebase Authorized Domains →
+              </a>
+            </div>
+          ) : authError ? (
+            <div className="p-3 rounded-lg border border-rose-500/40 bg-rose-500/10 text-xs text-rose-200 text-left">
+              {authError}
+            </div>
+          ) : null}
         </div>
       </div>
     );

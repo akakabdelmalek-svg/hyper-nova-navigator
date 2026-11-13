@@ -250,19 +250,87 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
       }),
     })
       .then(async (res) => {
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Erreur de recherche');
+        const rawText = await res.text();
+        let data: {
+          error?: string;
+          summary?: string;
+          knowledgeCard?: KnowledgeCardData | null;
+          results?: SearchResultItem[];
+        } | null = null;
+        try {
+          data = JSON.parse(rawText);
+        } catch {
+          throw new Error(`Réponse serveur invalide (HTTP ${res.status}).`);
+        }
+        if (!res.ok) throw new Error(data?.error || 'Erreur de recherche');
         return data;
       })
       .then((data) => {
         if (cancelled) return;
-        setSearchSummary(data.summary || '');
-        setKnowledgeCard(data.knowledgeCard || null);
-        setSearchResults(Array.isArray(data.results) ? data.results : []);
+        setSearchSummary(data?.summary || '');
+        setKnowledgeCard(data?.knowledgeCard || null);
+        setSearchResults(Array.isArray(data?.results) ? data.results : []);
       })
-      .catch((err: unknown) => {
+      .catch(async (err: unknown) => {
         if (cancelled) return;
-        setSearchError(err instanceof Error ? err.message : 'Recherche indisponible');
+        // Client-side CORS fallback via Wikipedia API if backend search endpoint is unreachable
+        try {
+          const wikiRes = await fetch(
+            `https://fr.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(
+              queryText
+            )}&gsrlimit=6&prop=pageimages|extracts|info&inprop=url&pithumbsize=480&exintro=1&explaintext=1&exsentences=3&format=json&origin=*`
+          );
+          if (wikiRes.ok) {
+            const wikiJson = (await wikiRes.json()) as {
+              query?: {
+                pages?: Record<
+                  string,
+                  {
+                    index?: number;
+                    title?: string;
+                    extract?: string;
+                    fullurl?: string;
+                    thumbnail?: { source?: string };
+                  }
+                >;
+              };
+            };
+            const pages = Object.values(wikiJson.query?.pages || {}).sort(
+              (a, b) => (a.index ?? 99) - (b.index ?? 99)
+            );
+            if (!cancelled && pages.length > 0) {
+              const fallbackItems: SearchResultItem[] = pages
+                .filter((p) => p.fullurl)
+                .map((p) => ({
+                  title: `${p.title || queryText} — Wikipédia`,
+                  url: p.fullurl!,
+                  domain: 'fr.wikipedia.org',
+                  snippet: p.extract,
+                  thumbnailUrl: p.thumbnail?.source,
+                  imageUrl: p.thumbnail?.source,
+                }));
+              setSearchResults(fallbackItems);
+              setSearchSummary(pages[0]?.extract || '');
+              setKnowledgeCard(
+                pages[0]?.fullurl && pages[0]?.extract
+                  ? {
+                      title: pages[0].title || queryText,
+                      description: pages[0].extract,
+                      imageUrl: pages[0].thumbnail?.source,
+                      url: pages[0].fullurl,
+                      source: 'Wikipédia (FR)',
+                    }
+                  : null
+              );
+              return;
+            }
+          }
+        } catch {
+          // ignore fallback error and show original message
+        }
+        if (!cancelled) {
+          setSearchError(err instanceof Error ? err.message : 'Recherche indisponible');
+        }
       })
       .finally(() => {
         if (!cancelled) setSearchLoading(false);
@@ -284,9 +352,15 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
 
     fetch(`/api/browse?url=${encodeURIComponent(tab.url)}`)
       .then(async (res) => {
-        const data = await res.json();
+        const rawText = await res.text();
+        let data: BrowsePageData & { error?: string };
+        try {
+          data = JSON.parse(rawText) as BrowsePageData & { error?: string };
+        } catch {
+          throw new Error(`Réponse serveur invalide (HTTP ${res.status}).`);
+        }
         if (!res.ok) throw new Error(data.error || 'Chargement impossible');
-        return data as BrowsePageData;
+        return data;
       })
       .then((data) => {
         if (!cancelled) setPageData(data);

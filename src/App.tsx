@@ -12,8 +12,10 @@ import {
   Cloud,
 } from 'lucide-react';
 import {
+  getRedirectResult,
   onAuthStateChanged,
   signInWithPopup,
+  signInWithRedirect,
   signOut,
   User,
 } from 'firebase/auth';
@@ -179,6 +181,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [myHandle, setMyHandle] = useState<ChatHandle | null>(null);
   const [handleLoading, setHandleLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   // GX Booster & Telemetry
   const [ramLimitGb, setRamLimitGb] = useState(8);
@@ -330,12 +333,20 @@ export default function App() {
   // Boot Firestore connection test + Auth state listener
   useEffect(() => {
     testFirestoreConnection();
+    getRedirectResult(auth).catch((err: { code?: string; message?: string }) => {
+      if (err?.code === 'auth/unauthorized-domain') {
+        setAuthError('UNAUTHORIZED_DOMAIN');
+      } else if (err?.message) {
+        setAuthError(err.message);
+      }
+    });
     const unsub = onAuthStateChanged(auth, async (fbUser) => {
       setUser(fbUser);
       if (!fbUser) {
         setMyHandle(null);
         return;
       }
+      setAuthError(null);
       setHandleLoading(true);
       try {
         const snap = await getDocs(
@@ -347,7 +358,8 @@ export default function App() {
           setMyHandle(null);
         }
       } catch (err) {
-        handleFirestoreError(err, OperationType.LIST, 'handles');
+        console.error('Erreur chargement handle Nova Chat:', err);
+        setAuthError(err instanceof Error ? err.message : 'Erreur de lecture du profil Nova Chat.');
       } finally {
         setHandleLoading(false);
       }
@@ -356,7 +368,49 @@ export default function App() {
   }, []);
 
   const handleSignIn = async () => {
-    await signInWithPopup(auth, googleProvider);
+    setAuthError(null);
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      if (code === 'auth/unauthorized-domain') {
+        setAuthError('UNAUTHORIZED_DOMAIN');
+      } else if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment'
+      ) {
+        try {
+          await signInWithRedirect(auth, googleProvider);
+        } catch (redirectErr: unknown) {
+          const rCode = (redirectErr as { code?: string })?.code || '';
+          setAuthError(
+            rCode === 'auth/unauthorized-domain'
+              ? 'UNAUTHORIZED_DOMAIN'
+              : 'Popup bloquée par le navigateur. Autorisez les popups ou réessayez via redirection.'
+          );
+        }
+      } else if (code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
+        setAuthError('Fenêtre de connexion Google fermée avant validation. Réessayez.');
+      } else {
+        setAuthError(err instanceof Error ? err.message : 'Erreur de connexion Google.');
+      }
+    }
+  };
+
+  const handleSignInRedirect = async () => {
+    setAuthError(null);
+    try {
+      await signInWithRedirect(auth, googleProvider);
+    } catch (err: unknown) {
+      const code = (err as { code?: string })?.code || '';
+      setAuthError(
+        code === 'auth/unauthorized-domain'
+          ? 'UNAUTHORIZED_DOMAIN'
+          : err instanceof Error
+          ? err.message
+          : 'Erreur de redirection Google.'
+      );
+    }
   };
 
   const handleSignOut = async () => {
@@ -847,7 +901,18 @@ export default function App() {
         }),
       });
 
-      const data = await res.json();
+      const rawText = await res.text();
+      let data: {
+        error?: string;
+        text?: string;
+        actions?: CrononovaAction[];
+        sources?: Array<{ uri: string; title: string }>;
+      };
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        throw new Error(`Réponse Crononova invalide (HTTP ${res.status}).`);
+      }
       if (!res.ok) {
         throw new Error(data.error || 'Erreur serveur Crononova');
       }
@@ -1205,8 +1270,10 @@ export default function App() {
               user={user}
               myHandle={myHandle}
               handleLoading={handleLoading}
+              authError={authError}
               streamerMode={streamerMode}
               onSignIn={handleSignIn}
+              onSignInRedirect={handleSignInRedirect}
               onSignOut={handleSignOut}
               onRegisterHandle={handleRegisterHandle}
               onAwardXp={awardXp}
