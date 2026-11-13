@@ -1,0 +1,336 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reusable Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidHandleId(handle) {
+      return handle is string && handle.size() >= 3 && handle.size() <= 24 && handle.matches('^[a-z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    // Entity Validators
+    function isValidChatHandle(data, handleId) {
+      return data.keys().hasAll(['uid', 'handle', 'displayName', 'avatarColor', 'status', 'isPublic', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'handle', 'displayName', 'avatarColor', 'status', 'isPublic', 'createdAt', 'updatedAt'])
+        && data.uid is string && data.uid == request.auth.uid && data.uid.size() <= 128
+        && data.handle is string && data.handle == handleId && isValidHandleId(data.handle)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 40
+        && data.avatarColor is string && data.avatarColor.size() >= 4 && data.avatarColor.size() <= 16
+        && data.status is string && data.status.size() >= 1 && data.status.size() <= 80
+        && data.isPublic is bool && data.isPublic == true
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPrivateInfo(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'handle', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'handle', 'updatedAt'])
+        && data.uid is string && data.uid == userId && data.uid.size() <= 128
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 160
+        && data.handle is string && isValidHandleId(data.handle)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidContactEntry(data, userId, contactUid) {
+      return data.keys().hasAll(['ownerUid', 'contactUid', 'contactHandle', 'displayName', 'avatarColor', 'category', 'addedAt'])
+        && data.keys().hasOnly(['ownerUid', 'contactUid', 'contactHandle', 'displayName', 'avatarColor', 'category', 'addedAt'])
+        && data.ownerUid is string && data.ownerUid == userId && data.ownerUid.size() <= 128
+        && data.contactUid is string && data.contactUid == contactUid && data.contactUid.size() <= 128
+        && data.contactHandle is string && isValidHandleId(data.contactHandle)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 40
+        && data.avatarColor is string && data.avatarColor.size() >= 4 && data.avatarColor.size() <= 16
+        && data.category is string && data.category in ['private', 'squad']
+        && data.addedAt is timestamp;
+    }
+
+    function isValidDirectMessageRoom(data) {
+      return data.keys().hasAll(['participants', 'participantHandles', 'lastMessage', 'updatedAt'])
+        && data.keys().hasOnly(['participants', 'participantHandles', 'lastMessage', 'updatedAt'])
+        && data.participants is list && data.participants.size() == 2
+        && data.participants[0] is string && data.participants[1] is string
+        && data.participantHandles is list && data.participantHandles.size() == 2
+        && data.participantHandles[0] is string && data.participantHandles[1] is string
+        && data.lastMessage is string && data.lastMessage.size() <= 500
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidDirectMessage(data) {
+      return data.keys().hasAll(['senderUid', 'senderHandle', 'avatarColor', 'text', 'participants', 'createdAt'])
+        && data.keys().hasOnly(['senderUid', 'senderHandle', 'avatarColor', 'text', 'participants', 'emojiReaction', 'createdAt'])
+        && data.senderUid is string && data.senderUid.size() <= 128
+        && data.senderHandle is string && isValidHandleId(data.senderHandle)
+        && data.avatarColor is string && data.avatarColor.size() >= 4 && data.avatarColor.size() <= 16
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && data.participants is list && data.participants.size() == 2
+        && data.participants[0] is string && data.participants[1] is string
+        && (!('emojiReaction' in data) || (data.emojiReaction is string && data.emojiReaction.size() <= 12))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSquadMessage(data) {
+      return data.keys().hasAll(['channelId', 'senderUid', 'senderHandle', 'avatarColor', 'text', 'isPublic', 'createdAt'])
+        && data.keys().hasOnly(['channelId', 'senderUid', 'senderHandle', 'avatarColor', 'text', 'emojiReaction', 'isPublic', 'createdAt'])
+        && data.channelId is string && data.channelId in ['squad', 'dev']
+        && data.senderUid is string && data.senderUid.size() <= 128
+        && data.senderHandle is string && isValidHandleId(data.senderHandle)
+        && data.avatarColor is string && data.avatarColor.size() >= 4 && data.avatarColor.size() <= 16
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 1000
+        && (!('emojiReaction' in data) || (data.emojiReaction is string && data.emojiReaction.size() <= 12))
+        && data.isPublic is bool && data.isPublic == true
+        && data.createdAt is timestamp;
+    }
+
+    function isValidIndieGame(data) {
+      return data.keys().hasAll(['title', 'tagline', 'description', 'genre', 'playType', 'gameUrl', 'htmlCode', 'coverTheme', 'authorUid', 'authorHandle', 'likesCount', 'playsCount', 'isPublic', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['title', 'tagline', 'description', 'genre', 'playType', 'gameUrl', 'htmlCode', 'packageId', 'entryFile', 'filesCount', 'totalSizeBytes', 'filesPreview', 'coverTheme', 'authorUid', 'authorHandle', 'likesCount', 'playsCount', 'isPublic', 'createdAt', 'updatedAt'])
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 80
+        && data.tagline is string && data.tagline.size() >= 2 && data.tagline.size() <= 140
+        && data.description is string && data.description.size() >= 5 && data.description.size() <= 2000
+        && data.genre is string && data.genre in ['Action', 'Sci-Fi', 'RPG', 'Puzzle', 'Arcade', 'Course']
+        && data.playType is string && data.playType in ['html5_code', 'file_bundle', 'web_url', 'download_url']
+        && data.gameUrl is string && data.gameUrl.size() <= 500
+        && data.htmlCode is string && data.htmlCode.size() <= 100000
+        && (!('packageId' in data) || (data.packageId is string && data.packageId.size() <= 64))
+        && (!('entryFile' in data) || (data.entryFile is string && data.entryFile.size() <= 260))
+        && (!('filesCount' in data) || (data.filesCount is int && data.filesCount >= 0))
+        && (!('totalSizeBytes' in data) || (data.totalSizeBytes is int && data.totalSizeBytes >= 0))
+        && (!('filesPreview' in data) || (data.filesPreview is string && data.filesPreview.size() <= 2000))
+        && data.coverTheme is string && data.coverTheme.size() >= 1 && data.coverTheme.size() <= 40
+        && data.authorUid is string && data.authorUid.size() >= 1 && data.authorUid.size() <= 128
+        && data.authorHandle is string && isValidHandleId(data.authorHandle)
+        && data.likesCount is int && data.likesCount >= 0
+        && data.playsCount is int && data.playsCount >= 0
+        && data.isPublic is bool && data.isPublic == true
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidGameComment(data) {
+      return data.keys().hasAll(['authorUid', 'authorHandle', 'text', 'isPublic', 'createdAt'])
+        && data.keys().hasOnly(['authorUid', 'authorHandle', 'text', 'isPublic', 'createdAt'])
+        && data.authorUid is string && data.authorUid.size() <= 128
+        && data.authorHandle is string && isValidHandleId(data.authorHandle)
+        && data.text is string && data.text.size() >= 1 && data.text.size() <= 600
+        && data.isPublic is bool && data.isPublic == true
+        && data.createdAt is timestamp;
+    }
+
+    // /handles/{handle} — Public Nova Chat Identity Registry (no PII)
+    match /handles/{handle} {
+      allow get: if isSignedIn() && isValidHandleId(handle);
+      allow list: if isSignedIn() && (resource.data.isPublic == true || resource.data.uid == request.auth.uid);
+      allow create: if isVerified()
+        && isValidHandleId(handle)
+        && isValidChatHandle(incoming(), handle)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidHandleId(handle)
+        && isValidChatHandle(incoming(), handle)
+        && existing().uid == request.auth.uid
+        && incoming().uid == existing().uid
+        && incoming().handle == existing().handle
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'avatarColor', 'status', 'updatedAt']);
+      allow delete: if isVerified() && isValidHandleId(handle) && existing().uid == request.auth.uid;
+    }
+
+    // /users/{userId}/private/{docId} — Strictly isolated PII
+    match /users/{userId}/private/{docId} {
+      allow get: if isSignedIn() && request.auth.uid == userId && isValidId(docId);
+      allow create: if isVerified()
+        && request.auth.uid == userId
+        && isValidId(docId)
+        && isValidUserPrivateInfo(incoming(), userId)
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && request.auth.uid == userId
+        && isValidId(docId)
+        && isValidUserPrivateInfo(incoming(), userId)
+        && incoming().uid == existing().uid
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'handle', 'updatedAt']);
+    }
+
+    // /users/{userId}/contacts/{contactUid} — Personal Friend List added by Handle ID
+    match /users/{userId}/contacts/{contactUid} {
+      allow get: if isSignedIn() && request.auth.uid == userId && isValidId(contactUid);
+      allow list: if isSignedIn() && request.auth.uid == userId && resource.data.ownerUid == request.auth.uid;
+      allow create: if isVerified()
+        && request.auth.uid == userId
+        && isValidId(contactUid)
+        && isValidContactEntry(incoming(), userId, contactUid)
+        && incoming().addedAt == request.time
+        && exists(/databases/$(database)/documents/handles/$(incoming().contactHandle))
+        && get(/databases/$(database)/documents/handles/$(incoming().contactHandle)).data.uid == contactUid;
+      allow update: if isVerified()
+        && request.auth.uid == userId
+        && isValidId(contactUid)
+        && isValidContactEntry(incoming(), userId, contactUid)
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().contactUid == existing().contactUid
+        && incoming().contactHandle == existing().contactHandle
+        && incoming().addedAt == existing().addedAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['category']);
+      allow delete: if isVerified() && request.auth.uid == userId && isValidId(contactUid);
+    }
+
+    // /dm_rooms/{roomId} — 1-on-1 Chat Rooms
+    match /dm_rooms/{roomId} {
+      allow get: if isSignedIn() && isValidId(roomId) && request.auth.uid in existing().participants;
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+      allow create: if isVerified()
+        && isValidId(roomId)
+        && isValidDirectMessageRoom(incoming())
+        && request.auth.uid in incoming().participants
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(roomId)
+        && isValidDirectMessageRoom(incoming())
+        && request.auth.uid in existing().participants
+        && incoming().participants == existing().participants
+        && incoming().participantHandles == existing().participantHandles
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly(['lastMessage', 'updatedAt']);
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(messageId) && request.auth.uid in existing().participants;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.participants;
+        allow create: if isVerified()
+          && isValidId(messageId)
+          && isValidDirectMessage(incoming())
+          && incoming().senderUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/dm_rooms/$(roomId))
+          && incoming().participants == get(/databases/$(database)/documents/dm_rooms/$(roomId)).data.participants
+          && request.auth.uid in incoming().participants;
+        allow update: if isVerified()
+          && isValidId(messageId)
+          && isValidDirectMessage(incoming())
+          && request.auth.uid in existing().participants
+          && incoming().senderUid == existing().senderUid
+          && incoming().senderHandle == existing().senderHandle
+          && incoming().text == existing().text
+          && incoming().participants == existing().participants
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['emojiReaction']);
+      }
+    }
+
+    // /squad_messages/{messageId} — Public Community Squad Chat
+    match /squad_messages/{messageId} {
+      allow get: if isSignedIn() && isValidId(messageId) && existing().isPublic == true;
+      allow list: if isSignedIn() && resource.data.isPublic == true;
+      allow create: if isVerified()
+        && isValidId(messageId)
+        && isValidSquadMessage(incoming())
+        && incoming().senderUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update: if isVerified()
+        && isValidId(messageId)
+        && isValidSquadMessage(incoming())
+        && incoming().senderUid == existing().senderUid
+        && incoming().senderHandle == existing().senderHandle
+        && incoming().channelId == existing().channelId
+        && incoming().text == existing().text
+        && incoming().isPublic == existing().isPublic
+        && incoming().createdAt == existing().createdAt
+        && incoming().diff(existing()).affectedKeys().hasOnly(['emojiReaction']);
+      allow delete: if isVerified() && isValidId(messageId) && existing().senderUid == request.auth.uid;
+    }
+
+    // /indie_games/{gameId} — GameJolt-style Community Games Catalog
+    match /indie_games/{gameId} {
+      allow get: if isValidId(gameId) && existing().isPublic == true;
+      allow list: if resource.data.isPublic == true;
+      allow create: if isVerified()
+        && isValidId(gameId)
+        && isValidIndieGame(incoming())
+        && incoming().authorUid == request.auth.uid
+        && incoming().likesCount == 0
+        && incoming().playsCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerified()
+        && isValidId(gameId)
+        && isValidIndieGame(incoming())
+        && incoming().authorUid == existing().authorUid
+        && incoming().authorHandle == existing().authorHandle
+        && incoming().isPublic == existing().isPublic
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Creator edits their game
+          (existing().authorUid == request.auth.uid
+            && incoming().likesCount == existing().likesCount
+            && incoming().playsCount == existing().playsCount
+            && incoming().diff(existing()).affectedKeys().hasOnly(['title', 'tagline', 'description', 'genre', 'playType', 'gameUrl', 'htmlCode', 'packageId', 'entryFile', 'filesCount', 'totalSizeBytes', 'filesPreview', 'coverTheme', 'updatedAt']))
+          ||
+          // Action 2: Any verified player launches/plays the game (+1 playsCount)
+          (incoming().playsCount == existing().playsCount + 1
+            && incoming().diff(existing()).affectedKeys().hasOnly(['playsCount', 'updatedAt']))
+          ||
+          // Action 3: Atomic Like (+1 or -1 paired with /likes/{uid})
+          (incoming().diff(existing()).affectedKeys().hasOnly(['likesCount', 'updatedAt'])
+            && ((incoming().likesCount == existing().likesCount + 1
+                  && existsAfter(/databases/$(database)/documents/indie_games/$(gameId)/likes/$(request.auth.uid)))
+                || (incoming().likesCount == existing().likesCount - 1
+                  && !existsAfter(/databases/$(database)/documents/indie_games/$(gameId)/likes/$(request.auth.uid)))))
+        );
+      allow delete: if isVerified() && isValidId(gameId) && existing().authorUid == request.auth.uid;
+
+      match /likes/{userId} {
+        allow get: if isSignedIn() && request.auth.uid == userId && isValidId(userId);
+        allow create: if isVerified()
+          && request.auth.uid == userId
+          && isValidId(userId)
+          && incoming().keys().hasAll(['uid', 'createdAt'])
+          && incoming().keys().hasOnly(['uid', 'createdAt'])
+          && incoming().uid == request.auth.uid
+          && incoming().createdAt == request.time
+          && getAfter(/databases/$(database)/documents/indie_games/$(gameId)).data.likesCount == get(/databases/$(database)/documents/indie_games/$(gameId)).data.likesCount + 1;
+        allow delete: if isVerified()
+          && request.auth.uid == userId
+          && isValidId(userId)
+          && getAfter(/databases/$(database)/documents/indie_games/$(gameId)).data.likesCount == get(/databases/$(database)/documents/indie_games/$(gameId)).data.likesCount - 1;
+      }
+
+      match /comments/{commentId} {
+        allow get: if isValidId(commentId) && existing().isPublic == true;
+        allow list: if resource.data.isPublic == true;
+        allow create: if isVerified()
+          && isValidId(commentId)
+          && isValidGameComment(incoming())
+          && incoming().authorUid == request.auth.uid
+          && incoming().createdAt == request.time
+          && exists(/databases/$(database)/documents/indie_games/$(gameId));
+        allow delete: if isVerified() && isValidId(commentId) && existing().authorUid == request.auth.uid;
+      }
+    }
+  }
+}

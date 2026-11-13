@@ -1,0 +1,94 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --nova-bg: #07090e;
+  --nova-surface: #0d121d;
+  --nova-surface-elevated: #121929;
+  --nova-border: rgba(148, 163, 184, 0.14);
+  --nova-accent: #06b6d4;
+  --nova-secondary: #8b5cf6;
+  --nova-text: #f1f5f9;
+  --nova-muted: #94a3b8;
+  --nova-font-display: "Chakra Petch", sans-serif;
+  --nova-font-body: "Plus Jakarta Sans", sans-serif;
+  --nova-font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  font-family: var(--nova-font-body);
+  background-color: var(--nova-bg);
+  color: var(--nova-text);
+  overflow: hidden;
+}
+
+.font-display {
+  font-family: var(--nova-font-display);
+}
+
+.font-mono-tabular {
+  font-family: var(--nova-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle scanline & holographic grid helpers */
+.nova-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(6, 182, 212, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.hyper-drive-active .nova-grid-bg {
+  background-image:
+    linear-gradient(to right, rgba(244, 63, 94, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(6, 182, 212, 0.08) 1px, transparent 1px);
+}
+
+/* Custom sleek scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(6, 182, 212, 0.45);
+}
+
+@keyframes orbit-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes pulse-ring {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.04);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

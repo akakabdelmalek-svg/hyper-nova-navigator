@@ -1,0 +1,179 @@
+{
+  "entities": {
+    "ChatHandle": {
+      "title": "ChatHandle",
+      "description": "Public chat identity registered by unique handle/ID name without PII.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "handle": { "type": "string", "minLength": 3, "maxLength": 24, "pattern": "^[a-z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "avatarColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "status": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "handle", "displayName", "avatarColor", "status", "isPublic", "createdAt", "updatedAt"]
+    },
+    "UserPrivateInfo": {
+      "title": "UserPrivateInfo",
+      "description": "Private user PII isolated strictly to owner.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 160 },
+        "handle": { "type": "string", "minLength": 3, "maxLength": 24, "pattern": "^[a-z0-9_\\-]+$" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "handle", "updatedAt"]
+    },
+    "ContactEntry": {
+      "title": "ContactEntry",
+      "description": "Friend or squad contact added by handle ID to user's personal chat contacts.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "contactUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "contactHandle": { "type": "string", "minLength": 3, "maxLength": 24, "pattern": "^[a-z0-9_\\-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "avatarColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "category": { "type": "string", "enum": ["private", "squad"] },
+        "addedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "contactUid", "contactHandle", "displayName", "avatarColor", "category", "addedAt"]
+    },
+    "DirectMessageRoom": {
+      "title": "DirectMessageRoom",
+      "description": "1-on-1 chat room between two Nova Chat account holders.",
+      "type": "object",
+      "properties": {
+        "participants": { "type": "array", "description": "Exactly 2 UIDs" },
+        "participantHandles": { "type": "array", "description": "Exactly 2 handles" },
+        "lastMessage": { "type": "string", "maxLength": 500 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["participants", "participantHandles", "lastMessage", "updatedAt"]
+    },
+    "DirectMessage": {
+      "title": "DirectMessage",
+      "description": "Individual message inside a direct chat room.",
+      "type": "object",
+      "properties": {
+        "senderUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "senderHandle": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "avatarColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "participants": { "type": "array", "description": "Exactly 2 UIDs matching parent room" },
+        "emojiReaction": { "type": "string", "maxLength": 12 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["senderUid", "senderHandle", "avatarColor", "text", "participants", "createdAt"]
+    },
+    "SquadMessage": {
+      "title": "SquadMessage",
+      "description": "Message in public Squad or Dev channels.",
+      "type": "object",
+      "properties": {
+        "channelId": { "type": "string", "enum": ["squad", "dev"] },
+        "senderUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "senderHandle": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "avatarColor": { "type": "string", "minLength": 4, "maxLength": 16 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "emojiReaction": { "type": "string", "maxLength": 12 },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["channelId", "senderUid", "senderHandle", "avatarColor", "text", "isPublic", "createdAt"]
+    },
+    "IndieGame": {
+      "title": "IndieGame",
+      "description": "Community-published game entry (GameJolt-style catalog).",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "tagline": { "type": "string", "minLength": 2, "maxLength": 140 },
+        "description": { "type": "string", "minLength": 5, "maxLength": 2000 },
+        "genre": { "type": "string", "enum": ["Action", "Sci-Fi", "RPG", "Puzzle", "Arcade", "Course"] },
+        "playType": { "type": "string", "enum": ["html5_code", "file_bundle", "web_url", "download_url"] },
+        "gameUrl": { "type": "string", "maxLength": 500 },
+        "htmlCode": { "type": "string", "maxLength": 100000 },
+        "packageId": { "type": "string", "maxLength": 64 },
+        "entryFile": { "type": "string", "maxLength": 260 },
+        "filesCount": { "type": "integer" },
+        "totalSizeBytes": { "type": "integer" },
+        "filesPreview": { "type": "string", "maxLength": 2000 },
+        "coverTheme": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "authorHandle": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "likesCount": { "type": "integer" },
+        "playsCount": { "type": "integer" },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "tagline", "description", "genre", "playType", "gameUrl", "htmlCode", "coverTheme", "authorUid", "authorHandle", "likesCount", "playsCount", "isPublic", "createdAt", "updatedAt"]
+    },
+    "GameLike": {
+      "title": "GameLike",
+      "description": "Atomic user like marker for an indie game.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "GameComment": {
+      "title": "GameComment",
+      "description": "Player review/comment on an indie game.",
+      "type": "object",
+      "properties": {
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "authorHandle": { "type": "string", "minLength": 3, "maxLength": 24 },
+        "text": { "type": "string", "minLength": 1, "maxLength": 600 },
+        "isPublic": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["authorUid", "authorHandle", "text", "isPublic", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/handles/{handle}": {
+      "schema": { "$ref": "#/entities/ChatHandle" },
+      "description": "Public registry mapping unique gamer handles (IDs) to UIDs and display info."
+    },
+    "/users/{userId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/UserPrivateInfo" },
+      "description": "Owner-only PII storage."
+    },
+    "/users/{userId}/contacts/{contactUid}": {
+      "schema": { "$ref": "#/entities/ContactEntry" },
+      "description": "User's added chat contacts."
+    },
+    "/dm_rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/DirectMessageRoom" },
+      "description": "1-on-1 direct message room metadata."
+    },
+    "/dm_rooms/{roomId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/DirectMessage" },
+      "description": "Messages in a 1-on-1 direct chat room."
+    },
+    "/squad_messages/{messageId}": {
+      "schema": { "$ref": "#/entities/SquadMessage" },
+      "description": "Public community squad chat messages."
+    },
+    "/indie_games/{gameId}": {
+      "schema": { "$ref": "#/entities/IndieGame" },
+      "description": "GameJolt-style community published games."
+    },
+    "/indie_games/{gameId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/GameLike" },
+      "description": "Per-user like document paired atomically with likesCount."
+    },
+    "/indie_games/{gameId}/comments/{commentId}": {
+      "schema": { "$ref": "#/entities/GameComment" },
+      "description": "Comments on community published games."
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Hyper Nova Navigator",
+  "description": "Station de contrôle futuriste et navigateur gaming avec IA Crononova, télémétrie temps réel, GX Booster, Media Center et Hyper Drive.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
