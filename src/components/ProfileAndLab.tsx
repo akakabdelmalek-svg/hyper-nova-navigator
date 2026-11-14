@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Camera,
   RotateCcw,
+  LogIn,
 } from 'lucide-react';
 import { GamerProfile, ShieldLogEntry, ThemePreset } from '../types/nova';
 
@@ -33,6 +34,7 @@ interface ProfileAndLabProps {
   onSyncCloud: () => void;
   onResetProfile?: () => void;
   onUpdateAvatar?: (avatarDataUrl: string | undefined) => void;
+  onOpenAuth?: () => void;
 }
 
 const RANK_LADDER = [
@@ -84,6 +86,7 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
   onSyncCloud,
   onResetProfile,
   onUpdateAvatar,
+  onOpenAuth,
 }) => {
   const [section, setSection] = useState<'profile' | 'themelab' | 'shield' | 'cloud'>(initialSection);
   const [customName, setCustomName] = useState('Mon Thème Nova');
@@ -282,6 +285,16 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
                 <div className="text-xs sm:text-sm text-slate-300 font-mono-tabular mt-1">
                   Niveau {profile.level} · {profile.xp.toLocaleString('fr-FR')} XP · {profile.achievements} Succès · {profile.badgesCount} Badges
                 </div>
+                {onOpenAuth && (
+                  <button
+                    type="button"
+                    onClick={onOpenAuth}
+                    className="mt-2.5 inline-flex items-center gap-1.5 h-8 px-3 rounded-md border border-cyan-500/45 bg-cyan-500/15 text-xs font-semibold text-cyan-100 hover:bg-cyan-500/25 transition-colors"
+                  >
+                    <LogIn className="w-3.5 h-3.5 text-cyan-300" />
+                    <span>{userEmail ? 'Gérer mon compte' : 'Se connecter / Créer un compte'}</span>
+                  </button>
+                )}
               </div>
             </div>
 

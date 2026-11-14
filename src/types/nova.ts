@@ -6,6 +6,7 @@ export type ModuleKind =
   | 'media'
   | 'chat'
   | 'profile'
+  | 'auth'
   | 'themelab'
   | 'shield'
   | 'cloud'

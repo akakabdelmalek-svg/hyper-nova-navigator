@@ -25,6 +25,7 @@ import {
   Code2,
   Lock,
   Store,
+  LogIn,
 } from 'lucide-react';
 import { BrowserTab, ModuleKind, SearchEngine } from '../types/nova';
 import { PWAInstallButton } from './PWAInstallButton';
@@ -56,6 +57,8 @@ interface BrowserChromeProps {
   onToggleSfx: () => void;
   hyperDrive: boolean;
   onToggleHyperDrive: () => void;
+  accountLabel?: string | null;
+  onOpenAuth?: () => void;
 }
 
 const TabIcon: React.FC<{ kind: ModuleKind; active: boolean; color: string }> = ({
@@ -86,6 +89,8 @@ const TabIcon: React.FC<{ kind: ModuleKind; active: boolean; color: string }> = 
       return <Shield className={cls} style={style} />;
     case 'cloud':
       return <Cloud className={cls} style={style} />;
+    case 'auth':
+      return <LogIn className={cls} style={style} />;
     case 'webapp':
       return <Code2 className={cls} style={style} />;
     default:
@@ -120,6 +125,8 @@ export const BrowserChrome: React.FC<BrowserChromeProps> = ({
   onToggleSfx,
   hyperDrive,
   onToggleHyperDrive,
+  accountLabel,
+  onOpenAuth,
 }) => {
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
   const [omniboxValue, setOmniboxValue] = useState(activeTab?.url || '');
@@ -218,6 +225,29 @@ export const BrowserChrome: React.FC<BrowserChromeProps> = ({
 
         {/* PWA Install Button */}
         <PWAInstallButton compact />
+
+        {/* Account / Login Button */}
+        {onOpenAuth && (
+          <button
+            type="button"
+            onClick={onOpenAuth}
+            title={accountLabel ? `Compte connecté : ${accountLabel}` : 'Se connecter ou créer un compte'}
+            className={`flex items-center gap-1.5 h-8 px-2.5 rounded-md border text-xs font-semibold whitespace-nowrap shrink-0 transition-colors ${
+              accountLabel
+                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20'
+                : 'border-cyan-500/45 bg-cyan-500/15 text-cyan-100 hover:bg-cyan-500/25'
+            }`}
+          >
+            {accountLabel ? (
+              <User className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
+            ) : (
+              <LogIn className="w-3.5 h-3.5 text-cyan-300 shrink-0" />
+            )}
+            <span className="max-w-[96px] truncate">
+              {accountLabel || 'Connexion'}
+            </span>
+          </button>
+        )}
 
         {/* Ultimate Hyper Drive Toggle */}
         <button

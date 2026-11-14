@@ -10,13 +10,19 @@ import {
   Palette,
   Shield,
   Cloud,
+  LogIn,
 } from 'lucide-react';
 import {
+  createUserWithEmailAndPassword,
   getRedirectResult,
   onAuthStateChanged,
+  sendEmailVerification,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
+  updateProfile,
   User,
 } from 'firebase/auth';
 import {
@@ -59,6 +65,7 @@ import { CrononovaPanel } from './components/CrononovaPanel';
 import { GamingOverlay } from './components/GamingOverlay';
 import { WebTabViewport } from './components/WebTabViewport';
 import { OfflineIndicator } from './components/PWAInstallButton';
+import { AuthView } from './components/AuthView';
 
 const THEME_PRESETS: ThemePreset[] = [
   {
@@ -180,6 +187,7 @@ export default function App() {
 
   // Firebase Auth + Nova Chat Account Handle
   const [user, setUser] = useState<User | null>(null);
+  const [, setUserRefreshTick] = useState(0);
   const [myHandle, setMyHandle] = useState<ChatHandle | null>(null);
   const [handleLoading, setHandleLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
@@ -382,6 +390,86 @@ export default function App() {
     return () => unsub();
   }, []);
 
+  const formatAuthErrorMessage = (err: unknown, fallback: string): string => {
+    const code = (err as { code?: string })?.code || '';
+    switch (code) {
+      case 'auth/unauthorized-domain':
+        return 'UNAUTHORIZED_DOMAIN';
+      case 'auth/operation-not-allowed':
+        return 'EMAIL_PROVIDER_DISABLED';
+      case 'auth/invalid-credential':
+      case 'auth/wrong-password':
+      case 'auth/user-not-found':
+        return 'Email ou mot de passe incorrect.';
+      case 'auth/email-already-in-use':
+        return 'Un compte existe déjà avec cette adresse email. Utilisez l’onglet « Se connecter ».';
+      case 'auth/weak-password':
+        return 'Le mot de passe doit contenir au moins 6 caractères.';
+      case 'auth/invalid-email':
+        return 'Adresse email invalide.';
+      case 'auth/too-many-requests':
+        return 'Trop de tentatives. Patientez quelques minutes avant de réessayer.';
+      default:
+        return err instanceof Error ? err.message : fallback;
+    }
+  };
+
+  const handleEmailSignIn = async (emailInput: string, passwordInput: string) => {
+    setAuthError(null);
+    try {
+      await signInWithEmailAndPassword(auth, emailInput, passwordInput);
+    } catch (err: unknown) {
+      const msg = formatAuthErrorMessage(err, 'Erreur de connexion par email.');
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
+  const handleEmailSignUp = async (
+    displayNameInput: string,
+    emailInput: string,
+    passwordInput: string
+  ) => {
+    setAuthError(null);
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, emailInput, passwordInput);
+      if (displayNameInput) {
+        await updateProfile(cred.user, { displayName: displayNameInput });
+      }
+      await sendEmailVerification(cred.user).catch(() => {});
+      await cred.user.reload().catch(() => {});
+      setUser(auth.currentUser);
+      setUserRefreshTick((n) => n + 1);
+    } catch (err: unknown) {
+      const msg = formatAuthErrorMessage(err, 'Erreur lors de la création du compte.');
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
+  const handlePasswordReset = async (emailInput: string) => {
+    setAuthError(null);
+    try {
+      await sendPasswordResetEmail(auth, emailInput);
+    } catch (err: unknown) {
+      const msg = formatAuthErrorMessage(err, 'Impossible d’envoyer l’email de réinitialisation.');
+      setAuthError(msg);
+      throw new Error(msg);
+    }
+  };
+
+  const handleResendVerification = async () => {
+    if (!auth.currentUser) throw new Error('Aucun compte connecté.');
+    await sendEmailVerification(auth.currentUser);
+  };
+
+  const handleRefreshUser = async () => {
+    if (!auth.currentUser) return;
+    await auth.currentUser.reload();
+    setUser(auth.currentUser);
+    setUserRefreshTick((n) => n + 1);
+  };
+
   const handleSignIn = async () => {
     setAuthError(null);
     try {
@@ -556,6 +644,7 @@ export default function App() {
         media: { title: 'Media Center', color: '#10B981', url: 'hypernova://media' },
         chat: { title: 'Nova Chat', color: '#8B5CF6', url: 'hypernova://chat' },
         profile: { title: 'Profil & Niveaux', color: '#F59E0B', url: 'hypernova://profile' },
+        auth: { title: 'Connexion & Compte', color: '#06B6D4', url: 'hypernova://login' },
         themelab: { title: 'Theme Lab', color: '#EC4899', url: 'hypernova://theme-lab' },
         shield: { title: 'Nova Shield', color: '#10B981', url: 'hypernova://shield' },
         cloud: { title: 'Nova Cloud', color: '#3B82F6', url: 'hypernova://cloud' },
@@ -977,6 +1066,16 @@ export default function App() {
     if (low === 'hypernova://media' || low === 'media') return openOrFocusModule('media');
     if (low === 'hypernova://chat' || low === 'chat') return openOrFocusModule('chat');
     if (low === 'hypernova://profile' || low === 'profil') return openOrFocusModule('profile');
+    if (
+      low === 'hypernova://login' ||
+      low === 'hypernova://signin' ||
+      low === 'hypernova://account' ||
+      low === 'login' ||
+      low === 'signin' ||
+      low === 'connexion'
+    ) {
+      return openOrFocusModule('auth');
+    }
     if (low === 'hypernova://theme-lab' || low === 'themes') return openOrFocusModule('themelab');
     if (low === 'hypernova://shield' || low === 'shield') return openOrFocusModule('shield');
     if (low === 'hypernova://cloud' || low === 'cloud') return openOrFocusModule('cloud');
@@ -1018,6 +1117,7 @@ export default function App() {
     { kind: 'media', label: 'Media', icon: Music },
     { kind: 'chat', label: 'Nova Chat', icon: MessageSquare },
     { kind: 'profile', label: 'Profil', icon: UserIcon },
+    { kind: 'auth', label: 'Compte', icon: LogIn },
     { kind: 'themelab', label: 'Theme Lab', icon: Palette },
     { kind: 'shield', label: 'Shield', icon: Shield },
     { kind: 'cloud', label: 'Cloud', icon: Cloud },
@@ -1098,6 +1198,12 @@ export default function App() {
         }}
         hyperDrive={hyperDrive}
         onToggleHyperDrive={() => handleToggleHyperDrive()}
+        accountLabel={
+          myHandle
+            ? `@${myHandle.handle}`
+            : user?.displayName || user?.email?.split('@')[0] || null
+        }
+        onOpenAuth={() => openOrFocusModule('auth')}
       />
 
       {/* Main Station Workspace */}
@@ -1189,7 +1295,7 @@ export default function App() {
             <NovaJolt
               user={user}
               myHandle={myHandle}
-              onSignIn={handleSignIn}
+              onSignIn={async () => openOrFocusModule('auth')}
               onOpenChatModule={() => openOrFocusModule('chat')}
               onLaunchHtmlGame={(title, code) => openHtmlAppTab(title, code)}
               onLaunchPackageGame={(title, iframeUrl) => openHtmlAppTab(title, '', iframeUrl)}
@@ -1290,11 +1396,36 @@ export default function App() {
               handleLoading={handleLoading}
               authError={authError}
               streamerMode={streamerMode}
+              onClearError={() => setAuthError(null)}
+              onEmailSignIn={handleEmailSignIn}
+              onEmailSignUp={handleEmailSignUp}
+              onPasswordReset={handlePasswordReset}
               onSignIn={handleSignIn}
               onSignInRedirect={handleSignInRedirect}
+              onResendVerification={handleResendVerification}
+              onRefreshUser={handleRefreshUser}
               onSignOut={handleSignOut}
               onRegisterHandle={handleRegisterHandle}
               onAwardXp={awardXp}
+            />
+          )}
+
+          {activeTab?.kind === 'auth' && (
+            <AuthView
+              user={user}
+              myHandle={myHandle}
+              authError={authError}
+              onClearError={() => setAuthError(null)}
+              onEmailSignIn={handleEmailSignIn}
+              onEmailSignUp={handleEmailSignUp}
+              onPasswordReset={handlePasswordReset}
+              onGoogleSignIn={handleSignIn}
+              onGoogleSignInRedirect={handleSignInRedirect}
+              onResendVerification={handleResendVerification}
+              onRefreshUser={handleRefreshUser}
+              onSignOut={handleSignOut}
+              onOpenChat={() => openOrFocusModule('chat')}
+              onOpenProfile={() => openOrFocusModule('profile')}
             />
           )}
 
@@ -1348,6 +1479,7 @@ export default function App() {
               }}
               onResetProfile={resetProfileToZero}
               onUpdateAvatar={handleUpdateAvatar}
+              onOpenAuth={() => openOrFocusModule('auth')}
             />
           )}
 
