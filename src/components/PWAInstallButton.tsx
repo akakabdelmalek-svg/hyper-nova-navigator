@@ -33,9 +33,11 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
     setCachedOffline(cached);
 
     if (isInstallable) {
-      await install();
-      setInstalling(false);
-      return;
+      const accepted = await install();
+      if (accepted) {
+        setInstalling(false);
+        return;
+      }
     }
 
     if (isIOS) {
