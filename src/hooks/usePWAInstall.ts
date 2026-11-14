@@ -8,6 +8,7 @@ interface BeforeInstallPromptEvent extends Event {
 declare global {
   interface Window {
     __deferredPwaPrompt?: BeforeInstallPromptEvent | null;
+    hyperNovaDesktop?: { isDesktopApp?: boolean; platform?: string };
   }
 }
 
@@ -19,7 +20,11 @@ export function usePWAInstall() {
   const [isIOS, setIsIOS] = useState(false);
 
   useEffect(() => {
+    const isDesktopApp =
+      Boolean(window.hyperNovaDesktop?.isDesktopApp) ||
+      window.navigator.userAgent.includes('Electron');
     const isStandalone =
+      isDesktopApp ||
       window.matchMedia('(display-mode: standalone)').matches ||
       (window.navigator as unknown as { standalone?: boolean }).standalone === true;
     setIsInstalled(isStandalone);

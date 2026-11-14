@@ -1,0 +1,63 @@
+{
+  "name": "hyper-nova-navigator-desktop",
+  "version": "1.0.0",
+  "description": "Application de bureau autonome Hyper Nova Navigator (Windows .exe, macOS .dmg, Linux .AppImage)",
+  "main": "main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "start:local": "HYPER_NOVA_URL=http://localhost:3000 electron .",
+    "build:win": "electron-builder --win nsis",
+    "build:mac": "electron-builder --mac dmg",
+    "build:linux": "electron-builder --linux AppImage",
+    "build:all": "electron-builder -mwl"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.hypernova.navigator",
+    "productName": "Hyper Nova Navigator",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs"
+    ],
+    "extraResources": [
+      {
+        "from": "../public/pwa-512x512.png",
+        "to": "icon.png"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../public/pwa-512x512.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Hyper Nova Navigator"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "../public/pwa-512x512.png",
+      "category": "public.app-category.utilities"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "../public/pwa-512x512.png",
+      "category": "Network"
+    }
+  }
+}
