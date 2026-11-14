@@ -26,7 +26,6 @@ import {
   getDoc,
   limit,
   onSnapshot,
-  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -72,6 +71,78 @@ function encodePathSegments(relPath: string): string {
     .split('/')
     .map((seg) => encodeURIComponent(seg))
     .join('/');
+}
+
+async function fileToBase64(file: File): Promise<string> {
+  const buf = await file.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function tryBuildInlineHtmlBundle(files: PendingGameFile[]): Promise<string | null> {
+  const htmlFiles = files
+    .filter((f) => /\.(html|htm)$/i.test(f.path))
+    .sort((a, b) => {
+      const aIndex = a.path.split('/').pop()?.toLowerCase() === 'index.html' ? 0 : 1;
+      const bIndex = b.path.split('/').pop()?.toLowerCase() === 'index.html' ? 0 : 1;
+      if (aIndex !== bIndex) return aIndex - bIndex;
+      return a.path.split('/').length - b.path.split('/').length;
+    });
+
+  const entry = htmlFiles[0];
+  if (!entry || entry.size > 95000) return null;
+
+  const hasNonTextAssets = files.some(
+    (f) => !/\.(html|htm|css|js|mjs|json|txt|svg)$/i.test(f.path)
+  );
+  if (hasNonTextAssets) return null;
+
+  let html = await entry.file.text();
+  const baseDir = entry.path.includes('/') ? entry.path.slice(0, entry.path.lastIndexOf('/') + 1) : '';
+  const fileMap = new Map<string, PendingGameFile>();
+  for (const f of files) {
+    fileMap.set(f.path.replace(/^\.\//, '').toLowerCase(), f);
+  }
+
+  const resolveSibling = (ref: string): PendingGameFile | undefined => {
+    const cleanRef = ref.split('?')[0].split('#')[0].replace(/^\.\//, '');
+    return (
+      fileMap.get((baseDir + cleanRef).toLowerCase()) ||
+      fileMap.get(cleanRef.toLowerCase())
+    );
+  };
+
+  // Inline local <link rel="stylesheet" href="...">
+  const linkMatches = Array.from(
+    html.matchAll(/<link[^>]+href=["']([^"']+\.css(?:\?[^"']*)?)["'][^>]*>/gi)
+  );
+  for (const m of linkMatches) {
+    const matchedFile = resolveSibling(m[1]);
+    if (matchedFile && matchedFile.size <= 45000) {
+      const cssText = await matchedFile.file.text();
+      html = html.replace(m[0], `<style>\n${cssText}\n</style>`);
+    }
+  }
+
+  // Inline local <script src="..."></script>
+  const scriptMatches = Array.from(
+    html.matchAll(/<script[^>]+src=["']([^"']+\.m?js(?:\?[^"']*)?)["'][^>]*>\s*<\/script>/gi)
+  );
+  for (const m of scriptMatches) {
+    const matchedFile = resolveSibling(m[1]);
+    if (matchedFile && matchedFile.size <= 65000) {
+      const jsText = await matchedFile.file.text();
+      const safeJs = jsText.replace(/<\/script>/gi, '<\\/script>');
+      html = html.replace(m[0], `<script>\n${safeJs}\n</script>`);
+    }
+  }
+
+  return html.length <= 98000 ? html : null;
 }
 
 async function readDroppedEntries(dataTransfer: DataTransfer): Promise<PendingGameFile[]> {
@@ -245,26 +316,33 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
   // Selected Game Detail Drawer
   const [selectedGame, setSelectedGame] = useState<IndieGame | null>(null);
   const [selectedManifest, setSelectedManifest] = useState<PackageManifest | null>(null);
+  const [manifestMissing, setManifestMissing] = useState(false);
   const [likedByMe, setLikedByMe] = useState(false);
   const [comments, setComments] = useState<GameComment[]>([]);
   const [commentDraft, setCommentDraft] = useState('');
 
-  // Load community games in real time
+  // Load community games in real time (sorted in JS — no composite index required)
   useEffect(() => {
     const path = 'indie_games';
     const q = query(
       collection(db, path),
       where('isPublic', '==', true),
-      orderBy('createdAt', 'desc'),
-      limit(60)
+      limit(80)
     );
     const unsub = onSnapshot(
       q,
       (snap) => {
-        const items: IndieGame[] = snap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as Omit<IndieGame, 'id'>),
-        }));
+        const items: IndieGame[] = snap.docs
+          .slice()
+          .sort((a, b) => {
+            const ta = a.data().createdAt?.toMillis ? a.data().createdAt.toMillis() : 0;
+            const tb = b.data().createdAt?.toMillis ? b.data().createdAt.toMillis() : 0;
+            return tb - ta;
+          })
+          .map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<IndieGame, 'id'>),
+          }));
         setGames(items);
         setLoading(false);
         if (selectedGame) {
@@ -281,7 +359,7 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Load selected game like status & comments
+  // Load selected game like status & comments (sorted in JS — no composite index required)
   useEffect(() => {
     if (!selectedGame) return;
 
@@ -290,23 +368,27 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
       query(
         collection(db, commentsPath),
         where('isPublic', '==', true),
-        orderBy('createdAt', 'desc'),
-        limit(40)
+        limit(60)
       ),
       (snap) => {
-        setComments(
-          snap.docs.map((d) => {
-            const data = d.data();
+        const mapped = snap.docs
+          .map((d) => ({ id: d.id, data: d.data() }))
+          .sort((a, b) => {
+            const ta = a.data.createdAt?.toMillis ? a.data.createdAt.toMillis() : 0;
+            const tb = b.data.createdAt?.toMillis ? b.data.createdAt.toMillis() : 0;
+            return tb - ta;
+          })
+          .map(({ id, data }) => {
             const ts = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
             return {
-              id: d.id,
+              id,
               authorUid: data.authorUid,
               authorHandle: data.authorHandle,
               text: data.text,
               time: ts.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
             };
-          })
-        );
+          });
+        setComments(mapped);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, commentsPath)
     );
@@ -320,9 +402,13 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
     }
 
     if (selectedGame.playType === 'file_bundle' && selectedGame.packageId) {
+      setManifestMissing(false);
       fetch(`/api/game-packages/${encodeURIComponent(selectedGame.packageId)}/manifest`)
         .then(async (res) => {
-          if (!res.ok) return null;
+          if (!res.ok) {
+            if (res.status === 404) setManifestMissing(true);
+            return null;
+          }
           const raw = await res.text();
           try {
             return JSON.parse(raw) as PackageManifest;
@@ -334,6 +420,7 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
         .catch(() => setSelectedManifest(null));
     } else {
       setSelectedManifest(null);
+      setManifestMissing(false);
     }
 
     return () => unsubComments();
@@ -406,6 +493,8 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
     setPublishing(true);
     setUploadProgress(playType === 'file_bundle' ? { sent: 0, total: pendingFiles.length } : null);
     try {
+      let effectivePlayType: IndieGame['playType'] = playType;
+      let effectiveHtmlCode = playType === 'html5_code' ? htmlCode.slice(0, 100000) : '';
       let packageId = '';
       let entryFile = '';
       let filesCount = 0;
@@ -413,78 +502,120 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
       let filesPreview = '';
 
       if (playType === 'file_bundle') {
-        const parseJsonResponse = async (res: Response, fallbackMsg: string) => {
-          const raw = await res.text();
-          try {
-            return JSON.parse(raw) as Record<string, unknown>;
-          } catch {
-            throw new Error(`${fallbackMsg} (HTTP ${res.status})`);
-          }
-        };
-
-        const initRes = await fetch('/api/game-packages/init', { method: 'POST' });
-        const initData = await parseJsonResponse(initRes, 'Échec d’initialisation du dossier.');
-        if (!initRes.ok || !initData.packageId) {
-          throw new Error(String(initData.error || 'Échec d’initialisation du dossier.'));
-        }
-
-        const pkgId = String(initData.packageId);
-        let sentCount = 0;
-        let cursor = 0;
-        const concurrency = 4;
-
-        const worker = async () => {
-          while (cursor < pendingFiles.length) {
-            const idx = cursor++;
-            const item = pendingFiles[idx];
-            const uploadRes = await fetch(
-              `/api/game-packages/${encodeURIComponent(pkgId)}/file`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/octet-stream',
-                  'x-nova-file-path': encodeURIComponent(item.path),
-                },
-                body: item.file,
-              }
-            );
-            if (!uploadRes.ok) {
-              const rawErr = await uploadRes.text().catch(() => '');
-              let parsedErr = '';
-              try {
-                parsedErr = String((JSON.parse(rawErr) as { error?: unknown })?.error || '');
-              } catch {
-                // ignore HTML error text
-              }
-              throw new Error(parsedErr || `Échec d’envoi pour ${item.path} (HTTP ${uploadRes.status})`);
+        const inlineHtml = await tryBuildInlineHtmlBundle(pendingFiles);
+        if (inlineHtml) {
+          effectivePlayType = 'html5_code';
+          effectiveHtmlCode = inlineHtml;
+        } else {
+          const parseJsonResponse = async (res: Response, fallbackMsg: string) => {
+            const raw = await res.text();
+            try {
+              return JSON.parse(raw) as Record<string, unknown>;
+            } catch {
+              throw new Error(`${fallbackMsg} (HTTP ${res.status})`);
             }
-            sentCount++;
-            setUploadProgress({ sent: sentCount, total: pendingFiles.length });
+          };
+
+          let serverRuntime = 'node';
+          try {
+            const healthRes = await fetch('/api/health');
+            const healthData = await parseJsonResponse(healthRes, 'Vérification serveur');
+            if (typeof healthData.runtime === 'string') {
+              serverRuntime = healthData.runtime;
+            }
+          } catch {
+            // default node streaming flow
           }
-        };
 
-        await Promise.all(
-          Array.from({ length: Math.min(concurrency, pendingFiles.length) }, () => worker())
-        );
+          if (serverRuntime === 'vercel' && totalSize <= 3.2 * 1024 * 1024) {
+            const encodedFiles = await Promise.all(
+              pendingFiles.map(async (item) => ({
+                path: item.path,
+                contentBase64: await fileToBase64(item.file),
+                mimeType: item.file.type || undefined,
+              }))
+            );
+            setUploadProgress({ sent: pendingFiles.length, total: pendingFiles.length });
+            const singleRes = await fetch('/api/game-packages', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ files: encodedFiles }),
+            });
+            const uploadData = await parseJsonResponse(singleRes, 'Échec de publication du dossier.');
+            if (!singleRes.ok) {
+              throw new Error(String(uploadData.error || 'Échec de publication du dossier.'));
+            }
+            packageId = String(uploadData.packageId || '');
+            entryFile = String(uploadData.entryFile || '');
+            filesCount = Number(uploadData.fileCount || pendingFiles.length);
+            totalSizeBytes = Number(uploadData.totalBytes || totalSize);
+          } else {
+            const initRes = await fetch('/api/game-packages/init', { method: 'POST' });
+            const initData = await parseJsonResponse(initRes, 'Échec d’initialisation du dossier.');
+            if (!initRes.ok || !initData.packageId) {
+              throw new Error(String(initData.error || 'Échec d’initialisation du dossier.'));
+            }
 
-        const finRes = await fetch(
-          `/api/game-packages/${encodeURIComponent(pkgId)}/finalize`,
-          { method: 'POST' }
-        );
-        const uploadData = await parseJsonResponse(finRes, 'Échec de finalisation du dossier.');
-        if (!finRes.ok) {
-          throw new Error(String(uploadData.error || 'Échec de finalisation du dossier.'));
+            const pkgId = String(initData.packageId);
+            let sentCount = 0;
+            let cursor = 0;
+            const concurrency = 4;
+
+            const worker = async () => {
+              while (cursor < pendingFiles.length) {
+                const idx = cursor++;
+                const item = pendingFiles[idx];
+                const uploadRes = await fetch(
+                  `/api/game-packages/${encodeURIComponent(pkgId)}/file`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/octet-stream',
+                      'x-nova-file-path': encodeURIComponent(item.path),
+                    },
+                    body: item.file,
+                  }
+                );
+                if (!uploadRes.ok) {
+                  const rawErr = await uploadRes.text().catch(() => '');
+                  let parsedErr = '';
+                  try {
+                    parsedErr = String((JSON.parse(rawErr) as { error?: unknown })?.error || '');
+                  } catch {
+                    // ignore HTML error text
+                  }
+                  throw new Error(parsedErr || `Échec d’envoi pour ${item.path} (HTTP ${uploadRes.status})`);
+                }
+                sentCount++;
+                setUploadProgress({ sent: sentCount, total: pendingFiles.length });
+              }
+            };
+
+            await Promise.all(
+              Array.from({ length: Math.min(concurrency, pendingFiles.length) }, () => worker())
+            );
+
+            const finRes = await fetch(
+              `/api/game-packages/${encodeURIComponent(pkgId)}/finalize`,
+              { method: 'POST' }
+            );
+            const uploadData = await parseJsonResponse(finRes, 'Échec de finalisation du dossier.');
+            if (!finRes.ok) {
+              throw new Error(String(uploadData.error || 'Échec de finalisation du dossier.'));
+            }
+
+            packageId = String(uploadData.packageId || pkgId);
+            entryFile = String(uploadData.entryFile || '');
+            filesCount = Number(uploadData.fileCount || pendingFiles.length);
+            totalSizeBytes = Number(uploadData.totalBytes || totalSize);
+          }
+
+          filesPreview = pendingFiles
+            .slice(0, 30)
+            .map((f) => `${f.path} (${formatBytes(f.size)})`)
+            .join('\n')
+            .slice(0, 1950);
         }
-
-        packageId = String(uploadData.packageId || pkgId);
-        entryFile = String(uploadData.entryFile || '');
-        filesCount = Number(uploadData.fileCount || pendingFiles.length);
-        totalSizeBytes = Number(uploadData.totalBytes || totalSize);
-        filesPreview = pendingFiles
-          .slice(0, 30)
-          .map((f) => `${f.path} (${formatBytes(f.size)})`)
-          .join('\n')
-          .slice(0, 1950);
       }
 
       const path = 'indie_games';
@@ -493,9 +624,9 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
         tagline: tagline.trim().slice(0, 140),
         description: description.trim().slice(0, 2000),
         genre,
-        playType,
+        playType: effectivePlayType,
         gameUrl: gameUrl.trim().slice(0, 500),
-        htmlCode: playType === 'html5_code' ? htmlCode.slice(0, 100000) : '',
+        htmlCode: effectiveHtmlCode,
         packageId,
         entryFile,
         filesCount,
@@ -534,7 +665,7 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
           updatedAt: serverTimestamp(),
         });
       } catch (err) {
-        handleFirestoreError(err, OperationType.UPDATE, `indie_games/${game.id}`);
+        console.warn('Incrémentation playsCount ignorée:', err);
       }
     }
     onAwardXp(35, 'play_game');
@@ -1236,6 +1367,12 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
                       </span>
                     )}
                   </div>
+
+                  {manifestMissing && (
+                    <div className="p-2.5 rounded border border-amber-500/35 bg-amber-500/10 text-[11px] text-amber-200">
+                      Les fichiers de ce paquet ne sont plus présents dans le stockage temporaire du serveur actuel (hébergement éphémère). Pour un jeu HTML5 permanent sur Vercel, publiez un dossier HTML/CSS/JS compact (&lt; 95 Ko) ou utilisez Code HTML5 / URL externe.
+                    </div>
+                  )}
 
                   {selectedManifest && selectedManifest.files.length > 0 ? (
                     <div className="max-h-44 overflow-y-auto divide-y divide-slate-800/80 border border-slate-800/80 rounded bg-[#05080F]">

@@ -27,6 +27,7 @@ import {
   Store,
 } from 'lucide-react';
 import { BrowserTab, ModuleKind, SearchEngine } from '../types/nova';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface BrowserChromeProps {
   tabs: BrowserTab[];
@@ -140,6 +141,11 @@ export const BrowserChrome: React.FC<BrowserChromeProps> = ({
       {/* Row 1: Multi Gaming Tabs Strip */}
       <div className="flex items-center gap-1.5 px-2.5 sm:px-3 pt-2 pb-1.5 overflow-x-auto">
         <div className="flex items-center gap-2 pr-2 sm:pr-3 mr-0.5 sm:mr-1 border-r border-slate-800/80 shrink-0">
+          <img
+            src="/hyper-nova-logo.png"
+            alt="Logo Hyper Nova"
+            className="w-5 h-5 rounded object-cover ring-1 ring-cyan-400/50 shrink-0"
+          />
           <span className="font-display text-xs sm:text-sm font-bold tracking-wider text-slate-100 whitespace-nowrap">
             HYPER NOVA
           </span>
@@ -209,6 +215,9 @@ export const BrowserChrome: React.FC<BrowserChromeProps> = ({
             <Plus className="w-4 h-4" />
           </button>
         </div>
+
+        {/* PWA Install Button */}
+        <PWAInstallButton compact />
 
         {/* Ultimate Hyper Drive Toggle */}
         <button

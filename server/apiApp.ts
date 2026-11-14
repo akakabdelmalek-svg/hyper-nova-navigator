@@ -1103,7 +1103,14 @@ export function createApiApp(): express.Express {
     next();
   });
 
-  app.use(express.json({ limit: '4mb' }));
+  const defaultJsonParser = express.json({ limit: '4mb' });
+  app.use((req, res, next) => {
+    if (req.path === '/api/game-packages' && req.method === 'POST') {
+      next();
+      return;
+    }
+    defaultJsonParser(req, res, next);
+  });
 
   app.get('/api/health', (_req, res) => {
     res.json({

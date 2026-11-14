@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#6FE3C1" />
+      <stop offset="48%" stop-color="#4A4AB8" />
+      <stop offset="100%" stop-color="#0B4CE3" />
+    </linearGradient>
+    <linearGradient id="comet" x1="0" y1="1" x2="1" y2="0">
+      <stop offset="0%" stop-color="#6B21FF" />
+      <stop offset="55%" stop-color="#38BDF8" />
+      <stop offset="100%" stop-color="#22D3EE" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="url(#bg)" />
+  <path d="M168 310c-36-22-40-76-8-114 40-48 118-92 198-120-58 46-114 96-144 136-18 24-14 54 14 66 26 12 68-8 118-56-34 52-118 124-178 88Z" fill="url(#comet)" />
+  <path d="M214 252c36-46 92-92 146-126-44 48-84 94-114 136-18 24-44 14-32-10Z" fill="#22D3EE" opacity="0.9" />
+</svg>

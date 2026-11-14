@@ -58,6 +58,7 @@ import { ProfileAndLab } from './components/ProfileAndLab';
 import { CrononovaPanel } from './components/CrononovaPanel';
 import { GamingOverlay } from './components/GamingOverlay';
 import { WebTabViewport } from './components/WebTabViewport';
+import { OfflineIndicator } from './components/PWAInstallButton';
 
 const THEME_PRESETS: ThemePreset[] = [
   {
@@ -1428,6 +1429,9 @@ export default function App() {
           onClose={() => setFloatingMediaOpen(false)}
         />
       )}
+
+      {/* Offline Connectivity Indicator */}
+      <OfflineIndicator />
     </div>
   );
 }
