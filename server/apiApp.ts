@@ -1934,7 +1934,7 @@ export function createApiApp(): express.Express {
     try {
       const rawOrigin = typeof req.query.origin === 'string' ? req.query.origin.trim() : '';
       const parsedOrigin = isPublicHttpUrl(rawOrigin);
-      const safeBaseUrl = (parsedOrigin ? `${parsedOrigin.protocol}//${parsedOrigin.host}` : 'https://hyper-nova-navigator-gaming.vercel.app')
+      const safeBaseUrl = (parsedOrigin ? `${parsedOrigin.protocol}//${parsedOrigin.host}` : 'https://hyper-nova-navigator.vercel.app')
         .replace(/[^a-zA-Z0-9.:/_-]/g, '');
 
       let iconBytes: Buffer | null = null;
