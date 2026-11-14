@@ -2078,6 +2078,51 @@ export function createApiApp(): express.Express {
     }
   });
 
+  // Check GitHub Releases for prebuilt native desktop installers (.exe / .dmg / .AppImage)
+  app.get('/api/latest-installer', async (req, res) => {
+    const platform = String(req.query.platform || 'win').toLowerCase();
+    const ext = platform === 'mac' ? '.dmg' : platform === 'linux' ? '.appimage' : '.exe';
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 2500);
+    try {
+      const ghRes = await fetch(
+        'https://api.github.com/repos/akakabdelmalek-svg/hyper-nova-navigator/releases/latest',
+        {
+          signal: controller.signal,
+          headers: {
+            'User-Agent': 'HyperNovaNavigator/1.0',
+            Accept: 'application/vnd.github+json',
+          },
+        }
+      );
+      if (!ghRes.ok) {
+        res.json({ available: false });
+        return;
+      }
+      const data = (await ghRes.json()) as {
+        tag_name?: string;
+        assets?: Array<{ name?: string; browser_download_url?: string; size?: number }>;
+      };
+      const match = (data.assets || []).find(
+        (a) => typeof a.name === 'string' && a.name.toLowerCase().endsWith(ext) && a.browser_download_url
+      );
+      if (!match || !match.browser_download_url) {
+        res.json({ available: false });
+        return;
+      }
+      res.json({
+        available: true,
+        downloadUrl: match.browser_download_url,
+        fileName: match.name,
+        version: data.tag_name || 'latest',
+      });
+    } catch {
+      res.json({ available: false });
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+
   // Ensure unknown /api/* routes always return JSON instead of falling through to SPA HTML
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Route API introuvable.' });

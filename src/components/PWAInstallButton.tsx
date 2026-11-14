@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, X, Share2, CheckCircle2, PackageCheck, Terminal } from 'lucide-react';
+import { Download, X, Share2, CheckCircle2, PackageCheck } from 'lucide-react';
 import { useOnlineStatus, usePWAInstall } from '../hooks/usePWAInstall';
 
 interface PWAInstallButtonProps {
@@ -13,12 +13,15 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
     isIOS,
     install,
     cacheOfflineBundle,
-    downloadDesktopInstaller,
+    downloadBestDesktopInstaller,
   } = usePWAInstall();
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [installing, setInstalling] = useState(false);
   const [cachedOffline, setCachedOffline] = useState(false);
-  const [packageDownloaded, setPackageDownloaded] = useState(false);
+  const [downloadedAsset, setDownloadedAsset] = useState<{
+    nativeBinary: boolean;
+    fileName: string;
+  } | null>(null);
 
   if (isInstalled) {
     return null;
@@ -41,9 +44,8 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
       return;
     }
 
-    // Download cross-platform desktop setup bundle when native browser prompt isn't supported (e.g. Firefox)
-    downloadDesktopInstaller();
-    setPackageDownloaded(true);
+    const result = await downloadBestDesktopInstaller();
+    setDownloadedAsset(result);
     setInstalling(false);
     setShowStatusModal(true);
   };
@@ -54,7 +56,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
         type="button"
         onClick={handleInstallAll}
         disabled={installing}
-        title="Installer Hyper Nova Navigator en application autonome"
+        title="Installer Hyper Nova Navigator en un clic"
         className={`group flex items-center gap-1.5 rounded-md border border-cyan-500/45 bg-gradient-to-r from-[#0F1B33] to-[#131736] text-xs font-semibold text-cyan-100 hover:border-cyan-400 hover:shadow-[0_0_16px_-4px_rgba(34,211,238,0.65)] transition-all whitespace-nowrap shrink-0 disabled:opacity-60 ${
           compact ? 'h-8 px-2' : 'h-8 sm:h-9 px-2.5'
         }`}
@@ -85,7 +87,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
                     Installer Hyper Nova Navigator
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Application autonome avec logo officiel
+                    Téléchargement automatique avec logo officiel
                   </p>
                 </div>
               </div>
@@ -114,40 +116,28 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
                 <p>1. Appuyez sur <strong>Partager</strong> dans Safari.</p>
                 <p>2. Sélectionnez <strong>Sur l’écran d’accueil</strong> pour créer l’app Hyper Nova.</p>
               </div>
+            ) : downloadedAsset?.nativeBinary ? (
+              <div className="p-3.5 rounded-lg border border-cyan-500/35 bg-cyan-500/10 space-y-2 text-xs text-slate-200">
+                <div className="flex items-center gap-2 font-semibold text-cyan-300">
+                  <PackageCheck className="w-4 h-4" />
+                  <span>Installeur téléchargé : {downloadedAsset.fileName}</span>
+                </div>
+                <p>
+                  Ouvrez le fichier téléchargé et cliquez sur <strong>Installer / OK</strong> pour lancer l’assistant complet (comme Firefox).
+                </p>
+              </div>
             ) : (
-              <div className="space-y-3">
-                <div className="p-3.5 rounded-lg border border-slate-800 bg-[#070B14] space-y-2 text-xs text-slate-300">
-                  <div className="flex items-center gap-2 font-semibold text-cyan-300">
-                    <PackageCheck className="w-4 h-4" />
-                    <span>
-                      {packageDownloaded
-                        ? 'Paquet Hyper-Nova-Navigator-Setup.zip téléchargé'
-                        : 'Installation rapide PC / Mac / Linux'}
-                    </span>
-                  </div>
-                  <p className="text-slate-400">
-                    Par sécurité, un site web ne peut pas exécuter un <code className="text-slate-200">.exe</code> directement depuis le navigateur. Deux options :
-                  </p>
-                  <p>
-                    • <strong>Via le ZIP téléchargé</strong> : extrayez <code className="text-cyan-200">Hyper-Nova-Navigator-Setup.zip</code> et double-cliquez sur <strong className="text-slate-100">Install-Hyper-Nova-Windows.bat</strong> (ou <code className="text-slate-200">.command</code> / <code className="text-slate-200">.sh</code>) pour créer l’icône Bureau et ouvrir en fenêtre autonome.
-                  </p>
-                  <p>
-                    • <strong>Installation 1-clic native</strong> : ouvrez ce site dans <strong>Chrome</strong> ou <strong>Edge</strong> et cliquez sur <em>Installer</em>.
-                  </p>
+              <div className="p-3.5 rounded-lg border border-slate-800 bg-[#070B14] space-y-2.5 text-xs text-slate-300">
+                <div className="flex items-center gap-2 font-semibold text-cyan-300">
+                  <PackageCheck className="w-4 h-4" />
+                  <span>Téléchargement automatique lancé ({downloadedAsset?.fileName || 'Setup.zip'})</span>
                 </div>
-
-                <div className="p-3 rounded-lg border border-violet-500/30 bg-violet-500/10 space-y-1.5 text-[11px] text-slate-300">
-                  <div className="flex items-center gap-1.5 font-semibold text-violet-200">
-                    <Terminal className="w-3.5 h-3.5" />
-                    <span>Compiler un vrai programme .exe indépendant (comme Firefox)</span>
-                  </div>
-                  <p className="text-slate-400">
-                    Le dossier <code className="text-violet-200">desktop/</code> du projet génère un installeur autonome Electron (<code className="text-violet-200">Hyper Nova Navigator Setup.exe</code>) sans aucun navigateur requis :
-                  </p>
-                  <code className="block p-2 rounded bg-[#050811] text-cyan-200 font-mono-tabular">
-                    cd desktop &amp;&amp; npm install &amp;&amp; npm run build:win
-                  </code>
-                </div>
+                <p>
+                  • <strong>Sur PC via le ZIP</strong> : ouvrez <code className="text-cyan-200">Hyper-Nova-Navigator-Setup.zip</code>, extrayez et double-cliquez sur <strong className="text-slate-100">Install-Hyper-Nova-Windows.bat</strong> (installation automatique en 1 clic sur Bureau + Menu Démarrer).
+                </p>
+                <p>
+                  • <strong>En 1 clic direct sans ZIP</strong> : ouvrez ce site dans <strong>Chrome</strong> ou <strong>Edge</strong>, cliquez sur <em>Installer</em> puis <em>OK</em> dans la popup du navigateur.
+                </p>
               </div>
             )}
 
@@ -155,10 +145,10 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({ compact = fa
               {!isIOS && (
                 <button
                   type="button"
-                  onClick={downloadDesktopInstaller}
+                  onClick={() => downloadBestDesktopInstaller()}
                   className="flex-1 h-9 rounded-md border border-cyan-500/40 bg-cyan-500/10 text-cyan-200 text-xs font-semibold hover:bg-cyan-500/20 transition-colors"
                 >
-                  Retélécharger (.zip)
+                  Retélécharger
                 </button>
               )}
               <button

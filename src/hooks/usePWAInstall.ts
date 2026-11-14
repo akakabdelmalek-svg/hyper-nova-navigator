@@ -12,6 +12,14 @@ declare global {
   }
 }
 
+function detectDesktopPlatform(): 'win' | 'mac' | 'linux' {
+  if (typeof navigator === 'undefined') return 'win';
+  const ua = navigator.userAgent.toLowerCase();
+  if (ua.includes('mac')) return 'mac';
+  if (ua.includes('linux')) return 'linux';
+  return 'win';
+}
+
 export function usePWAInstall() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(() =>
     typeof window !== 'undefined' ? window.__deferredPwaPrompt || null : null
@@ -92,7 +100,32 @@ export function usePWAInstall() {
     }
   }, []);
 
-  const downloadDesktopInstaller = useCallback(() => {
+  const downloadBestDesktopInstaller = useCallback(async (): Promise<{
+    nativeBinary: boolean;
+    fileName: string;
+  }> => {
+    const platform = detectDesktopPlatform();
+    try {
+      const res = await fetch(`/api/latest-installer?platform=${platform}`);
+      const raw = await res.text();
+      const data = JSON.parse(raw) as {
+        available?: boolean;
+        downloadUrl?: string;
+        fileName?: string;
+      };
+      if (data.available && data.downloadUrl) {
+        const a = document.createElement('a');
+        a.href = data.downloadUrl;
+        a.download = data.fileName || 'Hyper-Nova-Navigator-Setup.exe';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return { nativeBinary: true, fileName: data.fileName || 'Hyper-Nova-Navigator-Setup.exe' };
+      }
+    } catch {
+      // fallback to setup zip
+    }
+
     const origin = encodeURIComponent(window.location.origin);
     const a = document.createElement('a');
     a.href = `/api/install-package?origin=${origin}`;
@@ -100,6 +133,7 @@ export function usePWAInstall() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+    return { nativeBinary: false, fileName: 'Hyper-Nova-Navigator-Setup.zip' };
   }, []);
 
   return {
@@ -108,7 +142,7 @@ export function usePWAInstall() {
     isIOS,
     install,
     cacheOfflineBundle,
-    downloadDesktopInstaller,
+    downloadBestDesktopInstaller,
   };
 }
 
