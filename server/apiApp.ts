@@ -1929,6 +1929,155 @@ export function createApiApp(): express.Express {
     }
   });
 
+  // One-Click Cross-Platform Desktop Installer Bundle (.zip) with Hyper Nova icon
+  app.get('/api/install-package', async (req, res) => {
+    try {
+      const rawOrigin = typeof req.query.origin === 'string' ? req.query.origin.trim() : '';
+      const parsedOrigin = isPublicHttpUrl(rawOrigin);
+      const safeBaseUrl = (parsedOrigin ? `${parsedOrigin.protocol}//${parsedOrigin.host}` : 'https://hyper-nova-navigator-gaming.vercel.app')
+        .replace(/[^a-zA-Z0-9.:/_-]/g, '');
+
+      let iconBytes: Buffer | null = null;
+      const iconCandidates = [
+        path.resolve(process.cwd(), 'public', 'pwa-512x512.png'),
+        path.resolve(process.cwd(), 'dist', 'pwa-512x512.png'),
+      ];
+      for (const candidate of iconCandidates) {
+        try {
+          iconBytes = await fs.readFile(candidate);
+          if (iconBytes.length > 0) break;
+        } catch {
+          // try next candidate
+        }
+      }
+      if (!iconBytes && parsedOrigin) {
+        try {
+          const iconRes = await fetch(`${safeBaseUrl}/pwa-512x512.png`);
+          if (iconRes.ok) {
+            iconBytes = Buffer.from(await iconRes.arrayBuffer());
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      const windowsBat = [
+        '@echo off',
+        'setlocal enableextensions',
+        'title Installation de Hyper Nova Navigator',
+        'set "APP_DIR=%LOCALAPPDATA%\\HyperNovaNavigator"',
+        'set "URL=' + safeBaseUrl + '"',
+        'if not exist "%APP_DIR%" mkdir "%APP_DIR%"',
+        'if exist "%~dp0hyper-nova-icon.png" copy /Y "%~dp0hyper-nova-icon.png" "%APP_DIR%\\hyper-nova-icon.png" >nul',
+        'if exist "%~dp0Hyper-Nova-Launcher.html" copy /Y "%~dp0Hyper-Nova-Launcher.html" "%APP_DIR%\\Hyper-Nova-Launcher.html" >nul',
+        'powershell -NoProfile -ExecutionPolicy Bypass -Command "$png=\'%APP_DIR%\\hyper-nova-icon.png\'; $ico=\'%APP_DIR%\\hyper-nova.ico\'; if(Test-Path $png){ $b=[IO.File]::ReadAllBytes($png); $ms=New-Object IO.MemoryStream; $bw=New-Object IO.BinaryWriter($ms); $bw.Write([UInt16]0); $bw.Write([UInt16]1); $bw.Write([UInt16]1); $bw.Write([Byte]0); $bw.Write([Byte]0); $bw.Write([Byte]0); $bw.Write([Byte]0); $bw.Write([UInt16]1); $bw.Write([UInt16]32); $bw.Write([UInt32]$b.Length); $bw.Write([UInt32]22); $bw.Write($b); [IO.File]::WriteAllBytes($ico,$ms.ToArray()) }; $target=\'%URL%\'; $exe=\'\'; $args=\'\'; foreach($p in @(\"$env:ProgramFiles(x86)\\Microsoft\\Edge\\Application\\msedge.exe\",\"$env:ProgramFiles\\Microsoft\\Edge\\Application\\msedge.exe\",\"$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe\",\"$env:ProgramFiles(x86)\\Google\\Chrome\\Application\\chrome.exe\",\"$env:LOCALAPPDATA\\Google\\Chrome\\Application\\chrome.exe\")){ if(Test-Path $p){ $exe=$p; $args=\\\"--app=$target\\\"; break } }; $ws=New-Object -ComObject WScript.Shell; foreach($dir in @($ws.SpecialFolders(\'Desktop\'),\"$env:APPDATA\\Microsoft\\Windows\\Start Menu\\Programs\")){ $sc=$ws.CreateShortcut(\"$dir\\Hyper Nova Navigator.lnk\"); if($exe){ $sc.TargetPath=$exe; $sc.Arguments=$args } else { $sc.TargetPath=$target }; if(Test-Path $ico){ $sc.IconLocation=\"$ico,0\" }; $sc.Description=\'Hyper Nova Navigator\'; $sc.Save() }; if($exe){ Start-Process $exe -ArgumentList $args } else { Start-Process $target }"',
+        'echo Hyper Nova Navigator installe sur votre Bureau et Menu Demarrer !',
+        'timeout /t 3 >nul',
+      ].join('\r\n');
+
+      const linuxSh = [
+        '#!/usr/bin/env bash',
+        'set -e',
+        'APP_DIR="$HOME/.local/share/hyper-nova-navigator"',
+        'mkdir -p "$APP_DIR" "$HOME/.local/share/applications"',
+        'SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"',
+        'if [ -f "$SCRIPT_DIR/hyper-nova-icon.png" ]; then cp "$SCRIPT_DIR/hyper-nova-icon.png" "$APP_DIR/icon.png"; fi',
+        `URL="${safeBaseUrl}"`,
+        'BROWSER=""',
+        'for bin in google-chrome chromium chromium-browser microsoft-edge brave-browser; do',
+        '  if command -v "$bin" >/dev/null 2>&1; then BROWSER="$bin"; break; fi',
+        'done',
+        'EXEC_CMD="xdg-open $URL"',
+        'if [ -n "$BROWSER" ]; then EXEC_CMD="$BROWSER --app=$URL"; fi',
+        'DESKTOP_FILE="$HOME/.local/share/applications/hyper-nova-navigator.desktop"',
+        'cat > "$DESKTOP_FILE" <<EOF',
+        '[Desktop Entry]',
+        'Version=1.0',
+        'Type=Application',
+        'Name=Hyper Nova Navigator',
+        'Comment=Station de controle futuriste et navigateur gaming',
+        'Exec=$EXEC_CMD',
+        'Icon=$APP_DIR/icon.png',
+        'Terminal=false',
+        'Categories=Network;Game;WebBrowser;',
+        'EOF',
+        'chmod +x "$DESKTOP_FILE"',
+        'if [ -d "$HOME/Desktop" ]; then cp "$DESKTOP_FILE" "$HOME/Desktop/Hyper-Nova-Navigator.desktop" && chmod +x "$HOME/Desktop/Hyper-Nova-Navigator.desktop"; fi',
+        'nohup $EXEC_CMD >/dev/null 2>&1 &',
+        'echo "Hyper Nova Navigator installe !"',
+      ].join('\n');
+
+      const macCommand = [
+        '#!/usr/bin/env bash',
+        `URL="${safeBaseUrl}"`,
+        'if [ -d "/Applications/Google Chrome.app" ]; then',
+        '  open -a "Google Chrome" --args --app="$URL"',
+        'elif [ -d "/Applications/Microsoft Edge.app" ]; then',
+        '  open -a "Microsoft Edge" --args --app="$URL"',
+        'else',
+        '  open "$URL"',
+        'fi',
+      ].join('\n');
+
+      const launcherHtml = `<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="0;url=${safeBaseUrl}" />
+  <title>Hyper Nova Navigator</title>
+  <style>
+    body{margin:0;min-height:100vh;background:#07090E;color:#e2e8f0;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;text-align:center;padding:24px}
+    a{display:inline-block;margin-top:16px;padding:12px 24px;border-radius:10px;background:#06b6d4;color:#04101d;font-weight:700;text-decoration:none}
+  </style>
+</head>
+<body>
+  <div>
+    <h1>Hyper Nova Navigator</h1>
+    <p>Lancement de votre station spatiale...</p>
+    <a href="${safeBaseUrl}">Ouvrir Hyper Nova Navigator</a>
+  </div>
+</body>
+</html>`;
+
+      const readmeTxt = [
+        'HYPER NOVA NAVIGATOR - INSTALLATION EN 1 CLIC',
+        '================================================',
+        '',
+        'Windows :',
+        '  Extrayez le dossier puis double-cliquez sur Install-Hyper-Nova-Windows.bat',
+        '  -> Cree le raccourci avec le logo Hyper Nova sur le Bureau + Menu Demarrer',
+        '  -> Ouvre immediatement Hyper Nova Navigator en fenetre programme autonome.',
+        '',
+        'macOS :',
+        '  Double-cliquez sur Install-Hyper-Nova-Mac.command',
+        '',
+        'Linux :',
+        '  Lancez : bash Install-Hyper-Nova-Linux.sh',
+        '',
+        `URL directe : ${safeBaseUrl}`,
+      ].join('\r\n');
+
+      const entries: Array<{ name: string; data: Buffer }> = [
+        { name: 'Install-Hyper-Nova-Windows.bat', data: Buffer.from(windowsBat, 'utf8') },
+        { name: 'Install-Hyper-Nova-Linux.sh', data: Buffer.from(linuxSh, 'utf8') },
+        { name: 'Install-Hyper-Nova-Mac.command', data: Buffer.from(macCommand, 'utf8') },
+        { name: 'Hyper-Nova-Launcher.html', data: Buffer.from(launcherHtml, 'utf8') },
+        { name: 'LISEZ-MOI.txt', data: Buffer.from(readmeTxt, 'utf8') },
+      ];
+      if (iconBytes) {
+        entries.push({ name: 'hyper-nova-icon.png', data: iconBytes });
+      }
+
+      const zipBuf = buildStoreZipBuffer(entries);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="Hyper-Nova-Navigator-Setup.zip"');
+      res.send(zipBuf);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Erreur de génération du paquet d’installation.';
+      res.status(500).json({ error: message });
+    }
+  });
+
   // Ensure unknown /api/* routes always return JSON instead of falling through to SPA HTML
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Route API introuvable.' });
