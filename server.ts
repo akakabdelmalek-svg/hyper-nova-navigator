@@ -8,7 +8,8 @@ const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = createApiApp();
-  const PORT = Number(process.env.PORT || 3000);
+  const rawPort = Number(process.env.PORT || 3000);
+  const PORT = rawPort === 8080 ? 3000 : rawPort;
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

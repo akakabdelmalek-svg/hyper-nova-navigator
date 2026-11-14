@@ -62,16 +62,16 @@ export const MediaCenter: React.FC<MediaCenterProps> = ({
   const fileRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <div className="h-full overflow-y-auto p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-100">Media Center</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100">Media Center</h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Lecteur audio compatible Spotify, YouTube Music et MP3 locaux avec égaliseur Web Audio 5 bandes.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <input
             ref={fileRef}
             type="file"
@@ -109,15 +109,15 @@ export const MediaCenter: React.FC<MediaCenterProps> = ({
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Player + Equalizer */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="p-6 rounded-xl border border-slate-800 bg-[#0D1320] flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-            <div className="space-y-1.5">
+          <div className="p-4 sm:p-6 rounded-xl border border-slate-800 bg-[#0D1320] flex flex-col sm:flex-row sm:items-center justify-between gap-5 sm:gap-6">
+            <div className="space-y-1.5 min-w-0">
               <div className="text-xs font-mono-tabular text-emerald-400">
                 {currentTrack.source} · {currentTrack.bpm} BPM
               </div>
-              <h2 className="font-display text-2xl font-bold text-slate-100">
+              <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-100 truncate">
                 {currentTrack.title}
               </h2>
-              <p className="text-sm text-slate-400">{currentTrack.artist}</p>
+              <p className="text-sm text-slate-400 truncate">{currentTrack.artist}</p>
             </div>
 
             <div className="flex items-center gap-3">
@@ -172,10 +172,10 @@ export const MediaCenter: React.FC<MediaCenterProps> = ({
               </div>
             </div>
 
-            <div className="grid grid-cols-5 gap-4 pt-2">
+            <div className="grid grid-cols-5 gap-2 sm:gap-4 pt-2">
               {EQ_LABELS.map((label, idx) => (
-                <div key={label} className="flex flex-col items-center gap-2">
-                  <span className="font-mono-tabular text-xs text-cyan-300">
+                <div key={label} className="flex flex-col items-center gap-2 min-w-0">
+                  <span className="font-mono-tabular text-[10px] sm:text-xs text-cyan-300">
                     {eqBands[idx] > 0 ? `+${eqBands[idx]}` : eqBands[idx]} dB
                   </span>
                   <input
@@ -187,7 +187,9 @@ export const MediaCenter: React.FC<MediaCenterProps> = ({
                     onChange={(e) => onChangeEqBand(idx, Number(e.target.value))}
                     className="w-full accent-cyan-400 cursor-pointer"
                   />
-                  <span className="text-[11px] font-mono-tabular text-slate-400">{label}</span>
+                  <span className="text-[10px] sm:text-[11px] font-mono-tabular text-slate-400 truncate">
+                    {label}
+                  </span>
                 </div>
               ))}
             </div>
@@ -272,7 +274,7 @@ export const FloatingMediaWidget: React.FC<{
   onClose: () => void;
 }> = ({ track, isPlaying, onTogglePlay, onNext, onClose }) => {
   return (
-    <div className="fixed bottom-5 right-5 z-40 w-72 rounded-lg border border-emerald-500/40 bg-[#090E17]/95 backdrop-blur-md p-3.5 shadow-[0_12px_36px_-8px_rgba(16,185,129,0.3)]">
+    <div className="fixed bottom-16 md:bottom-5 right-3 sm:right-5 left-3 sm:left-auto sm:w-72 z-30 rounded-lg border border-emerald-500/40 bg-[#090E17]/95 backdrop-blur-md p-3.5 shadow-[0_12px_36px_-8px_rgba(16,185,129,0.3)]">
       <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b border-slate-800">
         <span className="text-[11px] font-mono-tabular uppercase tracking-wider text-emerald-400">
           Media Flottant · {track.source}

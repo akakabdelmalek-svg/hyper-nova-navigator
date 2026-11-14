@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Trophy,
   Award,
@@ -8,6 +8,8 @@ import {
   CheckCircle2,
   Download,
   RefreshCw,
+  Camera,
+  RotateCcw,
 } from 'lucide-react';
 import { GamerProfile, ShieldLogEntry, ThemePreset } from '../types/nova';
 
@@ -30,6 +32,7 @@ interface ProfileAndLabProps {
   onToggleShieldRule: (key: 'ads' | 'trackers' | 'malware' | 'phishing') => void;
   onSyncCloud: () => void;
   onResetProfile?: () => void;
+  onUpdateAvatar?: (avatarDataUrl: string | undefined) => void;
 }
 
 const RANK_LADDER = [
@@ -80,14 +83,55 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
   onToggleShieldRule,
   onSyncCloud,
   onResetProfile,
+  onUpdateAvatar,
 }) => {
   const [section, setSection] = useState<'profile' | 'themelab' | 'shield' | 'cloud'>(initialSection);
   const [customName, setCustomName] = useState('Mon Thème Nova');
   const [toast, setToast] = useState<string | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 3000);
+  };
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !onUpdateAvatar) return;
+    if (!file.type.startsWith('image/')) {
+      showToast('Veuillez sélectionner une image valide (PNG, JPG, WebP...).');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const rawDataUrl = typeof reader.result === 'string' ? reader.result : '';
+      if (!rawDataUrl) return;
+      const img = new Image();
+      img.onload = () => {
+        const size = 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          onUpdateAvatar(rawDataUrl);
+          showToast('Image de profil mise à jour.');
+          return;
+        }
+        const minSide = Math.min(img.width, img.height);
+        const sx = (img.width - minSide) / 2;
+        const sy = (img.height - minSide) / 2;
+        ctx.drawImage(img, sx, sy, minSide, minSide, 0, 0, size, size);
+        const compressed = canvas.toDataURL('image/jpeg', 0.88);
+        onUpdateAvatar(compressed);
+        showToast('Image de profil importée avec succès !');
+      };
+      img.onerror = () => showToast('Impossible de lire cette image.');
+      img.src = rawDataUrl;
+    };
+    reader.readAsDataURL(file);
   };
 
   const currentFloorXp = xpRequiredForLevel(profile.level);
@@ -128,10 +172,10 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       {/* Sub-navigation bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
-        <div className="flex items-center gap-1.5 p-1 rounded-lg border border-slate-800 bg-[#0B101B]">
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:gap-4 border-b border-slate-800/80 pb-4">
+        <div className="flex items-center gap-1.5 p-1 rounded-lg border border-slate-800 bg-[#0B101B] overflow-x-auto max-w-full">
           {[
             { id: 'profile', label: 'Profil & Niveaux', icon: Trophy },
             { id: 'themelab', label: 'Theme Lab', icon: Palette },
@@ -145,7 +189,7 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
                 key={item.id}
                 type="button"
                 onClick={() => setSection(item.id as typeof section)}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-md text-xs font-semibold transition-colors whitespace-nowrap ${
+                className={`flex items-center gap-2 px-3 sm:px-3.5 py-2 rounded-md text-xs font-semibold transition-colors whitespace-nowrap shrink-0 ${
                   active
                     ? 'bg-cyan-500 text-slate-950'
                     : 'text-slate-300 hover:text-slate-100 hover:bg-slate-800/60'
@@ -160,7 +204,7 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
 
         {toast && (
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-xs text-emerald-300">
-            <CheckCircle2 className="w-3.5 h-3.5" />
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
             <span>{toast}</span>
           </div>
         )}
@@ -168,27 +212,74 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
 
       {/* SECTION 1: PROFIL GAMING & RPG LEVELS */}
       {section === 'profile' && (
-        <div className="space-y-8">
-          <div className="p-6 rounded-xl border border-slate-800 bg-[#0D1320] flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-            <div className="flex items-center gap-5">
-              <div className="w-20 h-20 rounded-xl border border-cyan-500/50 overflow-hidden bg-slate-900 shrink-0">
-                <img
-                  src="/src/assets/images/avatar_malek_prime_1794552117105.jpg"
-                  alt="Avatar Malek Nova Prime"
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
+        <div className="space-y-6 sm:space-y-8">
+          <div className="p-4 sm:p-6 rounded-xl border border-slate-800 bg-[#0D1320] flex flex-col md:flex-row items-start md:items-center justify-between gap-5 sm:gap-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-5 min-w-0">
+              <div className="flex flex-col items-center gap-2 shrink-0">
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
                 />
+                <div className="relative group w-20 h-20 rounded-xl border border-cyan-500/50 overflow-hidden bg-slate-900">
+                  <img
+                    src={profile.avatarUrl || '/src/assets/images/avatar_malek_prime_1794552117105.jpg'}
+                    alt={`Avatar ${profile.name}`}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover"
+                  />
+                  {onUpdateAvatar && (
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      title="Importer une image de profil"
+                      aria-label="Importer une image de profil"
+                      className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 focus:opacity-100 flex items-center justify-center text-cyan-200 transition-opacity"
+                    >
+                      <Camera className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+                {onUpdateAvatar && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      className="flex items-center gap-1 px-2 py-1 rounded border border-cyan-500/40 bg-cyan-500/10 text-[10px] font-semibold text-cyan-200 hover:bg-cyan-500/20 transition-colors"
+                    >
+                      <Camera className="w-3 h-3" />
+                      <span>Importer photo</span>
+                    </button>
+                    {profile.avatarUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onUpdateAvatar(undefined);
+                          showToast('Avatar par défaut restauré.');
+                        }}
+                        title="Restaurer l'avatar par défaut"
+                        aria-label="Restaurer l'avatar par défaut"
+                        className="p-1 rounded border border-slate-700 text-slate-400 hover:text-rose-300 hover:border-rose-500/40 transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-              <div>
-                <div className="text-xs font-mono-tabular text-cyan-300">
+
+              <div className="min-w-0">
+                <div className="text-xs font-mono-tabular text-cyan-300 truncate">
                   {streamerMode
                     ? 'COMPTE PROTÉGÉ (STREAMER)'
                     : userEmail || 'Mode Invité · Progression Locale'}
                 </div>
-                <h1 className="font-display text-2xl font-bold text-slate-100 mt-0.5">
+                <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100 mt-0.5 break-words">
                   {profile.name} · {profile.rankTitle}
                 </h1>
-                <div className="text-sm text-slate-300 font-mono-tabular mt-1">
+                <div className="text-xs sm:text-sm text-slate-300 font-mono-tabular mt-1">
                   Niveau {profile.level} · {profile.xp.toLocaleString('fr-FR')} XP · {profile.achievements} Succès · {profile.badgesCount} Badges
                 </div>
               </div>
@@ -383,7 +474,7 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
                 value={customName}
                 onChange={(e) => setCustomName(e.target.value)}
                 placeholder="Nom du thème..."
-                className="h-10 px-3 rounded-md border border-slate-700 bg-[#080C15] text-xs text-slate-100"
+                className="w-full sm:w-auto flex-1 min-w-[160px] h-10 px-3 rounded-md border border-slate-700 bg-[#080C15] text-xs text-slate-100"
               />
               <button
                 type="button"
@@ -502,10 +593,10 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
               {shieldLogs.map((entry) => (
                 <div
                   key={entry.id}
-                  className="px-5 py-3 flex items-center justify-between text-xs"
+                  className="px-4 sm:px-5 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-4 text-xs"
                 >
-                  <span className="font-mono-tabular text-slate-200">{entry.domain}</span>
-                  <div className="flex items-center gap-4 text-slate-400">
+                  <span className="font-mono-tabular text-slate-200 truncate">{entry.domain}</span>
+                  <div className="flex items-center gap-3 sm:gap-4 text-slate-400 shrink-0">
                     <span>{entry.category}</span>
                     <span className="font-mono-tabular">{entry.timestamp}</span>
                     <span className="text-emerald-400 font-semibold">Bloqué</span>
@@ -559,9 +650,11 @@ export const ProfileAndLab: React.FC<ProfileAndLabProps> = ({
               </h3>
               <ul className="space-y-2 text-xs">
                 {bookmarks.map((bm) => (
-                  <li key={bm.title} className="flex items-center justify-between text-slate-300">
-                    <span className="font-medium">{bm.title}</span>
-                    <span className="font-mono-tabular text-slate-500">{bm.url}</span>
+                  <li key={bm.title} className="flex items-center justify-between gap-2 text-slate-300">
+                    <span className="font-medium truncate">{bm.title}</span>
+                    <span className="font-mono-tabular text-slate-500 truncate max-w-[55%]">
+                      {bm.url}
+                    </span>
                   </li>
                 ))}
               </ul>

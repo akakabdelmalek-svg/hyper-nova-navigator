@@ -52,12 +52,12 @@ export const GamingHub: React.FC<GamingHubProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-100">Gaming Hub & Launcher</h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100">Gaming Hub & Launcher</h1>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Centre de commandement matériel, statut Discord et lancement instantané de vos bibliothèques.
           </p>
         </div>
@@ -117,7 +117,7 @@ export const GamingHub: React.FC<GamingHubProps> = ({
 
       {/* Integrated 1-Click Launcher */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-display text-lg font-bold text-slate-100">
             Launcher Intégré — Un seul clic
           </h2>
@@ -167,9 +167,9 @@ export const GamingHub: React.FC<GamingHubProps> = ({
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0D1320] via-transparent to-transparent" />
               </div>
-              <div className="p-5 flex items-center justify-between gap-4">
-                <div>
-                  <h3 className="font-display text-lg font-bold text-slate-100">{game.title}</h3>
+              <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+                <div className="min-w-0">
+                  <h3 className="font-display text-lg font-bold text-slate-100 truncate">{game.title}</h3>
                   <div className="text-xs text-slate-400 mt-1">
                     {game.platform} · {game.hours} jouées · Cible {game.fpsTarget}
                   </div>

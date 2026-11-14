@@ -170,4 +170,5 @@ export interface GamerProfile {
   achievements: number;
   badgesCount: number;
   unlockedAchievements?: string[];
+  avatarUrl?: string;
 }

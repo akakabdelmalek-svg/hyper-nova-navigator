@@ -325,10 +325,24 @@ export default function App() {
 
   const resetProfileToZero = useCallback(() => {
     const freshName = myHandle?.displayName?.toUpperCase() || user?.displayName?.toUpperCase() || 'EXPLORATEUR';
-    const fresh = createZeroProfile(freshName);
+    const fresh: GamerProfile = {
+      ...createZeroProfile(freshName),
+      avatarUrl: profile.avatarUrl,
+    };
     setProfile(fresh);
     localStorage.setItem('hypernova_profile_v2', JSON.stringify(fresh));
-  }, [myHandle, user]);
+  }, [myHandle, user, profile.avatarUrl]);
+
+  const handleUpdateAvatar = useCallback((avatarDataUrl: string | undefined) => {
+    setProfile((prev) => {
+      const updated: GamerProfile = {
+        ...prev,
+        avatarUrl: avatarDataUrl,
+      };
+      localStorage.setItem('hypernova_profile_v2', JSON.stringify(updated));
+      return updated;
+    });
+  }, []);
 
   // Boot Firestore connection test + Auth state listener
   useEffect(() => {
@@ -894,10 +908,13 @@ export default function App() {
           mode: modeToUse,
           activePageContext: activeContext,
           hyperDrive,
-          history: crononovaMessages.slice(-6).map((m) => ({
-            role: m.role,
-            text: m.text,
-          })),
+          history: crononovaMessages
+            .filter((m) => !m.error && m.id !== 'welcome')
+            .slice(-6)
+            .map((m) => ({
+              role: m.role,
+              text: m.text,
+            })),
         }),
       });
 
@@ -1007,7 +1024,7 @@ export default function App() {
 
   return (
     <div
-      className={`h-screen w-screen flex flex-col overflow-hidden relative ${
+      className={`h-[100dvh] w-full flex flex-col overflow-hidden relative ${
         hyperDrive ? 'hyper-drive-active' : ''
       }`}
       style={{
@@ -1083,11 +1100,11 @@ export default function App() {
       />
 
       {/* Main Station Workspace */}
-      <div className="relative z-10 flex-1 flex min-h-0 overflow-hidden">
-        {/* Compact Left Command Rail */}
+      <div className="relative z-10 flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+        {/* Tablet/Desktop Left Command Rail */}
         <nav
           aria-label="Navigation des modules Hyper Nova"
-          className="w-16 shrink-0 border-r border-slate-800/80 bg-[#080C15]/90 backdrop-blur-md flex flex-col items-center py-3 gap-1.5 overflow-y-auto"
+          className="hidden md:flex w-16 shrink-0 border-r border-slate-800/80 bg-[#080C15]/90 backdrop-blur-md flex-col items-center py-3 gap-1.5 overflow-y-auto"
         >
           {SIDEBAR_MODULES.map((mod) => {
             const Icon = mod.icon;
@@ -1114,7 +1131,7 @@ export default function App() {
         </nav>
 
         {/* Active Tab Content Stage */}
-        <main className="flex-1 min-w-0 h-full overflow-hidden bg-[#07090E]/60 backdrop-blur-[2px]">
+        <main className="flex-1 min-w-0 min-h-0 h-full overflow-hidden bg-[#07090E]/60 backdrop-blur-[2px]">
           {activeTab?.kind === 'universe' && (
             <NovaUniverse
               profile={
@@ -1329,6 +1346,7 @@ export default function App() {
                 awardXp(20, 'cloud_sync');
               }}
               onResetProfile={resetProfileToZero}
+              onUpdateAvatar={handleUpdateAvatar}
             />
           )}
 
@@ -1357,6 +1375,34 @@ export default function App() {
           onClose={() => setCrononovaOpen(false)}
         />
       </div>
+
+      {/* Mobile Bottom Command Dock */}
+      <nav
+        aria-label="Navigation mobile des modules Hyper Nova"
+        className="flex md:hidden items-center gap-1 px-2 py-1.5 border-t border-slate-800/80 bg-[#080C15]/95 backdrop-blur-md overflow-x-auto shrink-0 z-20"
+      >
+        {SIDEBAR_MODULES.map((mod) => {
+          const Icon = mod.icon;
+          const isActive = activeTab?.kind === mod.kind;
+          return (
+            <button
+              key={`mob-${mod.kind}`}
+              type="button"
+              onClick={() => openOrFocusModule(mod.kind)}
+              className={`min-w-[58px] px-2 py-1.5 rounded-lg flex flex-col items-center justify-center gap-1 shrink-0 transition-colors ${
+                isActive
+                  ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40'
+                  : 'text-slate-400 hover:text-slate-100 border border-transparent'
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="text-[9px] font-medium leading-none truncate max-w-[54px]">
+                {mod.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
 
       {/* Floating Gaming Overlay HUD */}
       {overlayOpen && (

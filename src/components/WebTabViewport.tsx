@@ -281,7 +281,8 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
             )}&gsrlimit=6&prop=pageimages|extracts|info&inprop=url&pithumbsize=480&exintro=1&explaintext=1&exsentences=3&format=json&origin=*`
           );
           if (wikiRes.ok) {
-            const wikiJson = (await wikiRes.json()) as {
+            const wikiRaw = await wikiRes.text();
+            const wikiJson = JSON.parse(wikiRaw) as {
               query?: {
                 pages?: Record<
                   string,
@@ -586,10 +587,10 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
 
     return (
       <div className="h-full flex flex-col bg-[#080B12]">
-        {/* Engine Header (Google / Bing / DuckDuckGo / Qwant look inside Hyper Nova) */}
-        <div className="px-5 pt-3.5 pb-0 border-b border-slate-800 bg-[#0B101B]">
-          <div className="flex flex-wrap items-center justify-between gap-3 pb-3">
-            <div className="flex items-center gap-4 flex-1 min-w-[260px]">
+        {/* Engine Header (Bing / DuckDuckGo / Qwant look inside Hyper Nova) */}
+        <div className="px-3 sm:px-5 pt-3.5 pb-0 border-b border-slate-800 bg-[#0B101B]">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pb-3">
+            <div className="flex items-center gap-2.5 sm:gap-4 flex-1 min-w-0 w-full md:w-auto md:min-w-[260px]">
               <button
                 type="button"
                 onClick={() => onSearchWithEngine('', engine, 'web', true)}
@@ -756,7 +757,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
             className="flex-1 w-full bg-white border-0"
           />
         ) : (
-          <div className="flex-1 overflow-y-auto px-5 py-6 lg:px-10">
+          <div className="flex-1 overflow-y-auto px-3.5 sm:px-5 py-4 sm:py-6 lg:px-10">
             <div className="max-w-6xl mx-auto">
               {searchLoading ? (
                 <div className="flex items-center gap-3 p-6 rounded-xl border border-slate-800 bg-[#0D1320] text-sm text-cyan-300">
@@ -916,7 +917,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
                 /* Classic 'Tout' Web Search Results with Right Knowledge Panel */
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                   <div className="lg:col-span-8 space-y-6">
-                    <div className="flex items-center justify-between text-xs text-slate-400">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
                       <span>
                         Environ {searchResults.length} résultats sur {meta.label} pour « {queryText} »
                       </span>
@@ -1106,28 +1107,28 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
 
   if (info) {
     return (
-      <div className="h-full overflow-y-auto p-8 max-w-5xl mx-auto">
-        <div className="rounded-xl border border-slate-800/90 bg-[#0D1320]/90 p-7">
+      <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto">
+        <div className="rounded-xl border border-slate-800/90 bg-[#0D1320]/90 p-4 sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4 pb-6 border-b border-slate-800/80">
-            <div className="space-y-2 max-w-2xl">
-              <div className="flex items-center gap-2 text-xs font-mono-tabular text-slate-400">
-                <Globe className="w-4 h-4" style={{ color: info.accent }} />
-                <span>{tab.url}</span>
+            <div className="space-y-2 max-w-2xl min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-mono-tabular text-slate-400">
+                <Globe className="w-4 h-4 shrink-0" style={{ color: info.accent }} />
+                <span className="truncate max-w-[220px] sm:max-w-none">{tab.url}</span>
                 <span>·</span>
                 <span className="inline-flex items-center gap-1 text-emerald-400">
                   <ShieldCheck className="w-3.5 h-3.5" />
                   {shieldEnabled ? 'Nova Shield Actif' : 'Shield en pause'}
                 </span>
               </div>
-              <h1 className="font-display text-2xl font-bold text-slate-100">{info.label}</h1>
-              <p className="text-sm text-slate-400 leading-relaxed">{info.description}</p>
+              <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100">{info.label}</h1>
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">{info.description}</p>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
                 onClick={() => onSearchWithEngine(tab.title, 'bing', 'web', false)}
-                className="flex items-center gap-2 px-4 py-2 rounded-md bg-cyan-500 text-slate-950 text-xs font-semibold hover:bg-cyan-400 transition-colors whitespace-nowrap"
+                className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-md bg-cyan-500 text-slate-950 text-xs font-semibold hover:bg-cyan-400 transition-colors whitespace-nowrap"
               >
                 <Search className="w-3.5 h-3.5" />
                 <span>Rechercher sur Bing</span>
@@ -1136,7 +1137,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
                 href={info.externalUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 px-4 py-2 rounded-md border border-slate-700 bg-slate-900 text-slate-200 text-xs font-medium hover:border-slate-500 transition-colors whitespace-nowrap"
+                className="flex items-center gap-2 px-3.5 sm:px-4 py-2 rounded-md border border-slate-700 bg-slate-900 text-slate-200 text-xs font-medium hover:border-slate-500 transition-colors whitespace-nowrap"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
                 <span>Ouvrir le site officiel</span>
@@ -1151,7 +1152,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
               </h2>
               <div className="divide-y divide-slate-800/80 border border-slate-800/80 rounded-lg bg-[#080C15]">
                 {info.highlights.map((item) => (
-                  <div key={item.title} className="p-4 flex items-center justify-between gap-4">
+                  <div key={item.title} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
                     <div>
                       <p className="text-sm font-medium text-slate-100">{item.title}</p>
                       <p className="text-xs text-slate-400 mt-1">{item.meta}</p>
@@ -1197,7 +1198,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
 
   return (
     <div className="h-full flex flex-col bg-[#080B12]">
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 border-b border-slate-800/80 bg-[#0C111C] text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 px-3 sm:px-5 py-2.5 border-b border-slate-800/80 bg-[#0C111C] text-xs">
         <div className="flex items-center gap-2 text-slate-300 min-w-0">
           {urlBackStack.length > 0 && (
             <button
@@ -1207,7 +1208,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
                 setUrlBackStack((s) => s.slice(0, -1));
                 onNavigateInTab(prevUrl);
               }}
-              className="flex items-center gap-1 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-200 hover:border-cyan-400/50"
+              className="flex items-center gap-1 px-2 py-1 rounded border border-slate-700 bg-slate-900 text-slate-200 hover:border-cyan-400/50 shrink-0"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Retour</span>
@@ -1217,18 +1218,18 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
             type="button"
             onClick={() => setReloadTick((n) => n + 1)}
             title="Recharger la page"
-            className="p-1.5 rounded border border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
+            className="p-1.5 rounded border border-slate-800 bg-slate-900 text-slate-300 hover:text-white shrink-0"
           >
             <RotateCw className="w-3.5 h-3.5" />
           </button>
           <Globe className="w-4 h-4 text-cyan-400 shrink-0" />
-          <span className="font-mono-tabular truncate max-w-md">{tab.url}</span>
-          <span className="text-emerald-400 shrink-0">
+          <span className="font-mono-tabular truncate max-w-[170px] sm:max-w-md">{tab.url}</span>
+          <span className="text-emerald-400 shrink-0 hidden sm:inline">
             · {shieldEnabled ? 'Nova Shield Actif' : 'Shield off'}
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <div className="flex items-center rounded-md border border-slate-800 bg-[#080C15] p-0.5">
             <button
               type="button"
@@ -1302,7 +1303,7 @@ export const WebTabViewport: React.FC<WebTabViewportProps> = ({
           className="flex-1 w-full bg-white border-0"
         />
       ) : (
-        <div className="flex-1 overflow-y-auto p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-6">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-6">
           {pageLoading ? (
             <div className="flex items-center gap-2 text-sm font-mono-tabular text-cyan-300">
               <RotateCw className="w-4 h-4 animate-spin" />

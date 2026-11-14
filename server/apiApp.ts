@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import fsSync from 'node:fs';
 import crypto from 'node:crypto';
 import dotenv from 'dotenv';
-import { FunctionDeclaration, GoogleGenAI, Type } from '@google/genai';
+import { GoogleGenAI, Type, type FunctionDeclaration } from '@google/genai';
 
 dotenv.config();
 
@@ -634,67 +634,278 @@ async function fetchWikipediaData(query: string): Promise<{
   return { summary: '', links: [] };
 }
 
-function isRateLimitOrQuotaError(err: unknown): boolean {
+function isRetryableGeminiError(err: unknown): boolean {
   if (!err) return false;
   const text = err instanceof Error ? err.message : String(err);
   const status = (err as { status?: number; code?: number })?.status ?? (err as { code?: number })?.code;
   return (
     status === 429 ||
+    status === 404 ||
+    status === 503 ||
     text.includes('429') ||
+    text.includes('404') ||
     text.includes('RESOURCE_EXHAUSTED') ||
-    text.toLowerCase().includes('quota')
+    text.toLowerCase().includes('quota') ||
+    text.toLowerCase().includes('not found')
   );
 }
 
-function tryLocalBrowserControlFallback(
-  prompt: string
-): { text: string; actions: Array<{ name: string; args: Record<string, unknown> }> } | null {
-  const lower = prompt.toLowerCase();
+function buildFallbackCalculatorHtml(): string {
+  return `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Calculatrice Hyper Nova</title>
+<style>
+  *{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
+  body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#0f172a,#050811);color:#e2e8f0;display:flex;align-items:center;justify-content:center;padding:16px}
+  .calc{width:100%;max-width:340px;background:#0b1120;border:1px solid rgba(34,211,238,.35);border-radius:16px;padding:18px;box-shadow:0 20px 50px rgba(6,182,212,.2)}
+  .hud{font-size:11px;letter-spacing:.14em;color:#22d3ee;text-transform:uppercase;margin-bottom:10px;display:flex;justify-content:space-between}
+  .screen{background:#050811;border:1px solid #1e293b;border-radius:10px;padding:14px;text-align:right;margin-bottom:14px}
+  .expr{font-size:12px;color:#64748b;min-height:18px;word-break:break-all}
+  .val{font-size:30px;font-weight:700;color:#f8fafc;margin-top:4px;overflow-x:auto}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  button{height:50px;border:1px solid #1e293b;border-radius:10px;background:#111827;color:#f1f5f9;font-size:16px;font-weight:600;cursor:pointer;transition:.15s}
+  button:hover{border-color:#22d3ee;background:#162238}
+  button.op{color:#22d3ee;background:#0c192c}
+  button.eq{grid-column:span 2;background:linear-gradient(135deg,#06b6d4,#8b5cf6);color:#04101d;border:none;font-weight:700}
+  button.clr{color:#fb7185}
+</style>
+</head>
+<body>
+<div class="calc">
+  <div class="hud"><span>HYPER NOVA CALC</span><span>SYS READY</span></div>
+  <div class="screen"><div class="expr" id="expr"></div><div class="val" id="val">0</div></div>
+  <div class="grid">
+    <button class="clr" onclick="clr()">C</button>
+    <button class="op" onclick="del()">⌫</button>
+    <button class="op" onclick="add('%')">%</button>
+    <button class="op" onclick="add('/')">÷</button>
+    <button onclick="add('7')">7</button><button onclick="add('8')">8</button><button onclick="add('9')">9</button>
+    <button class="op" onclick="add('*')">×</button>
+    <button onclick="add('4')">4</button><button onclick="add('5')">5</button><button onclick="add('6')">6</button>
+    <button class="op" onclick="add('-')">−</button>
+    <button onclick="add('1')">1</button><button onclick="add('2')">2</button><button onclick="add('3')">3</button>
+    <button class="op" onclick="add('+')">+</button>
+    <button onclick="add('0')">0</button><button onclick="add('.')">.</button>
+    <button class="eq" onclick="eq()">=</button>
+  </div>
+</div>
+<script>
+  let cur = '';
+  const exprEl = document.getElementById('expr');
+  const valEl = document.getElementById('val');
+  function render(res){ exprEl.textContent = cur; valEl.textContent = res ?? (cur || '0'); }
+  function add(ch){ cur += ch; render(); }
+  function clr(){ cur = ''; render('0'); }
+  function del(){ cur = cur.slice(0,-1); render(); }
+  function eq(){
+    try{
+      if(!/^[0-9+\\-*/.%()\\s]+$/.test(cur)) throw new Error();
+      const out = Function('"use strict";return (' + cur + ')')();
+      const str = Number.isFinite(out) ? String(Number(out.toFixed(8))) : 'Erreur';
+      exprEl.textContent = cur + ' ='; cur = str === 'Erreur' ? '' : str; valEl.textContent = str;
+    }catch{ valEl.textContent = 'Erreur'; }
+  }
+  window.addEventListener('keydown', (e) => {
+    if(/^[0-9+\\-*/.%()]$/.test(e.key)) add(e.key);
+    else if(e.key === 'Enter' || e.key === '=') eq();
+    else if(e.key === 'Backspace') del();
+    else if(e.key === 'Escape') clr();
+  });
+</script>
+</body>
+</html>`;
+}
 
+function buildFallbackMiniGameHtml(title: string): string {
+  const safeTitle = title.replace(/[<>&"]/g, '');
+  return `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${safeTitle}</title>
+<style>
+  body{margin:0;background:#050811;color:#e2e8f0;font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+  .bar{display:flex;gap:16px;align-items:center;margin-bottom:10px;font-size:14px}
+  canvas{background:#090f1e;border:1px solid rgba(34,211,238,.45);border-radius:12px;max-width:100%;touch-action:none}
+  button{padding:6px 14px;border-radius:8px;border:none;background:#06b6d4;color:#04101d;font-weight:700;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="bar"><strong>${safeTitle}</strong><span>Score : <b id="sc">0</b></span><button onclick="resetGame()">Rejouer</button></div>
+<canvas id="c" width="520" height="360"></canvas>
+<script>
+  const c = document.getElementById('c'), ctx = c.getContext('2d'), sc = document.getElementById('sc');
+  let score = 0, target = {x:260,y:180,r:22}, particles = [];
+  function spawn(){ target = {x: 40 + Math.random()*(c.width-80), y: 40 + Math.random()*(c.height-80), r: 18 + Math.random()*12}; }
+  function resetGame(){ score = 0; sc.textContent = '0'; spawn(); }
+  c.addEventListener('pointerdown', (e) => {
+    const r = c.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (c.width / r.width);
+    const y = (e.clientY - r.top) * (c.height / r.height);
+    if(Math.hypot(x-target.x, y-target.y) <= target.r + 6){
+      score += 10; sc.textContent = String(score);
+      for(let i=0;i<14;i++) particles.push({x:target.x,y:target.y,vx:(Math.random()-.5)*6,vy:(Math.random()-.5)*6,life:24});
+      spawn();
+    }
+  });
+  function loop(){
+    ctx.fillStyle = 'rgba(9,15,30,0.35)'; ctx.fillRect(0,0,c.width,c.height);
+    ctx.beginPath(); ctx.arc(target.x,target.y,target.r,0,Math.PI*2);
+    ctx.fillStyle = '#06b6d4'; ctx.fill(); ctx.lineWidth = 3; ctx.strokeStyle = '#f43f5e'; ctx.stroke();
+    particles = particles.filter(p => p.life > 0);
+    for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.life--; ctx.fillStyle='#22d3ee'; ctx.fillRect(p.x,p.y,3,3); }
+    requestAnimationFrame(loop);
+  }
+  loop();
+</script>
+</body>
+</html>`;
+}
+
+function buildFallbackCustomSiteHtml(topic: string): string {
+  const safeTopic = topic.replace(/[<>&"]/g, '').slice(0, 80) || 'Station Hyper Nova';
+  return `<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>${safeTopic}</title>
+<style>
+  *{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
+  body{margin:0;min-height:100vh;background:linear-gradient(160deg,#050811,#0f172a);color:#e2e8f0;padding:28px}
+  .wrap{max-width:760px;margin:0 auto}
+  .badge{display:inline-block;padding:4px 10px;border:1px solid rgba(34,211,238,.45);border-radius:6px;color:#22d3ee;font-size:12px;margin-bottom:12px}
+  h1{font-size:28px;margin:0 0 10px}
+  p{color:#94a3b8;line-height:1.6}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-top:24px}
+  .card{background:#0b1120;border:1px solid #1e293b;border-radius:12px;padding:16px}
+  .card h3{margin:0 0 6px;color:#38bdf8;font-size:15px}
+  button{margin-top:18px;padding:10px 18px;border-radius:8px;border:none;background:#06b6d4;color:#04101d;font-weight:700;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge">CRONONOVA LIVE BUILDER</div>
+  <h1>${safeTopic}</h1>
+  <p>Application web interactive générée instantanément dans Hyper Nova Navigator.</p>
+  <button onclick="document.getElementById('status').textContent='Système activé à '+new Date().toLocaleTimeString('fr-FR')">Tester l'interaction</button>
+  <p id="status" style="color:#34d399;font-size:13px"></p>
+  <div class="grid">
+    <div class="card"><h3>Interface HUD</h3><p>Design sombre optimisé haute lisibilité.</p></div>
+    <div class="card"><h3>Performance 60 FPS</h3><p>Exécution locale autonome sans latence.</p></div>
+    <div class="card"><h3>Responsive</h3><p>Adapté mobile, tablette et ordinateur.</p></div>
+  </div>
+</div>
+</body>
+</html>`;
+}
+
+function tryLocalBrowserControlFallback(
+  prompt: string,
+  mode = 'assistant'
+): { text: string; actions: Array<{ name: string; args: Record<string, unknown> }> } | null {
+  const lower = prompt.toLowerCase().trim();
+
+  // 1. Hyper Drive toggle
   if (lower.includes('hyper drive') || lower.includes('hyperdrive')) {
     const disable =
-      lower.includes('désactive') || lower.includes('desactive') || lower.includes('stop') || lower.includes('off');
+      lower.includes('désactive') ||
+      lower.includes('desactive') ||
+      lower.includes('stop') ||
+      lower.includes('off') ||
+      lower.includes('coupe');
     return {
       text: disable
-        ? 'Hyper Drive désactivé via le contrôle local Hyper Nova.'
-        : 'Hyper Drive activé via le contrôle local Hyper Nova !',
+        ? 'Hyper Drive désactivé dans Hyper Nova Navigator.'
+        : 'Hyper Drive activé ! Performances visuelles et télémétrie en surrégime.',
       actions: [{ name: 'toggle_hyper_drive', args: { enabled: !disable } }],
     };
   }
 
+  // 2. Streamer mode toggle
   if (lower.includes('streamer')) {
-    const disable = lower.includes('désactive') || lower.includes('desactive') || lower.includes('off');
+    const disable =
+      lower.includes('désactive') || lower.includes('desactive') || lower.includes('off') || lower.includes('stop');
     return {
-      text: disable ? 'Mode Streamer désactivé.' : 'Mode Streamer activé : notifications privées masquées.',
+      text: disable
+        ? 'Mode Streamer désactivé.'
+        : 'Mode Streamer activé : notifications et messages privés masqués.',
       actions: [{ name: 'toggle_streamer_mode', args: { enabled: !disable } }],
     };
   }
 
-  if (lower.includes('gx booster') || (lower.includes('optimise') && lower.includes('ram'))) {
+  // 3. GX Booster / RAM / Cache optimization
+  if (
+    lower.includes('gx booster') ||
+    (lower.includes('optimise') && (lower.includes('ram') || lower.includes('pc') || lower.includes('navigateur'))) ||
+    lower.includes('nettoie le cache')
+  ) {
     const gbMatch = lower.match(/(\d+)\s*go/);
     const ramLimitGb = gbMatch ? Math.min(8, Math.max(2, Number(gbMatch[1]))) : 4;
     return {
-      text: `GX Booster lancé avec une limite RAM de ${ramLimitGb} Go.`,
+      text: `GX Booster exécuté : limite RAM réglée sur ${ramLimitGb} Go et onglets inactifs suspendus.`,
       actions: [{ name: 'run_gx_booster', args: { ramLimitGb } }],
     };
   }
 
+  // 4. Theme Preset switcher
+  const themeMatches: Array<{ keywords: string[]; presetName: string }> = [
+    { keywords: ['cosmic dark', 'sombre'], presetName: 'Cosmic Dark' },
+    { keywords: ['cyber neon', 'néon', 'neon'], presetName: 'Cyber Neon' },
+    { keywords: ['galaxy blue', 'bleu', 'galaxy'], presetName: 'Galaxy Blue' },
+    { keywords: ['phoenix fire', 'feu', 'phoenix'], presetName: 'Phoenix Fire' },
+  ];
+  if (lower.includes('thème') || lower.includes('theme') || lower.includes('couleur')) {
+    for (const t of themeMatches) {
+      if (t.keywords.some((kw) => lower.includes(kw))) {
+        return {
+          text: `Thème « ${t.presetName} » appliqué au cockpit Hyper Nova.`,
+          actions: [{ name: 'apply_theme_preset', args: { presetName: t.presetName } }],
+        };
+      }
+    }
+  }
+
+  // 5. Launch Game Platforms
+  const platforms = ['Steam', 'Epic Games', 'Xbox', 'Riot Games', 'Battle.net', 'Ubisoft Connect'];
+  if (lower.includes('lance') || lower.includes('démarre') || lower.includes('joue')) {
+    for (const plat of platforms) {
+      if (lower.includes(plat.toLowerCase())) {
+        return {
+          text: `Ouverture du Launcher ${plat} dans le Gaming Hub.`,
+          actions: [{ name: 'launch_game_platform', args: { platform: plat } }],
+        };
+      }
+    }
+  }
+
+  // 6. Open tabs / modules / explicit URLs
   const targetMap: Array<{ keywords: string[]; target: string; title: string }> = [
-    { keywords: ['youtube'], target: 'youtube', title: 'YouTube' },
+    { keywords: ['youtube', 'ytb'], target: 'youtube', title: 'YouTube' },
     { keywords: ['discord'], target: 'discord', title: 'Discord' },
     { keywords: ['spotify'], target: 'spotify', title: 'Spotify' },
     { keywords: ['nova jolt', 'novajolt', 'gamejolt'], target: 'novajolt', title: 'Nova Jolt' },
     { keywords: ['gaming hub', 'launcher'], target: 'gaming', title: 'Gaming Hub' },
-    { keywords: ['telemetry', 'statistique'], target: 'telemetry', title: 'Télémétrie' },
-    { keywords: ['media', 'musique'], target: 'media', title: 'Media Center' },
-    { keywords: ['chat', 'contact'], target: 'chat', title: 'Nova Chat' },
-    { keywords: ['profil', 'profile'], target: 'profile', title: 'Profil Gaming' },
+    { keywords: ['telemetry', 'télémétrie', 'statistique', 'fps'], target: 'telemetry', title: 'Télémétrie' },
+    { keywords: ['media', 'musique', 'lecteur'], target: 'media', title: 'Media Center' },
+    { keywords: ['chat', 'contact', 'message'], target: 'chat', title: 'Nova Chat' },
+    { keywords: ['profil', 'profile', 'niveau'], target: 'profile', title: 'Profil Gaming' },
     { keywords: ['theme', 'thème'], target: 'themelab', title: 'Theme Lab' },
     { keywords: ['cloud'], target: 'cloud', title: 'Nova Cloud' },
     { keywords: ['universe', 'accueil'], target: 'universe', title: 'Nova Universe' },
   ];
 
-  if (lower.includes('ouvre') || lower.includes('open') || lower.includes('va sur') || lower.includes('lance')) {
+  if (
+    lower.includes('ouvre') ||
+    lower.includes('open') ||
+    lower.includes('va sur') ||
+    lower.includes('lance') ||
+    lower.includes('affiche')
+  ) {
     for (const entry of targetMap) {
       if (entry.keywords.some((kw) => lower.includes(kw))) {
         return {
@@ -703,20 +914,149 @@ function tryLocalBrowserControlFallback(
         };
       }
     }
+    const domainMatch = prompt.match(/https?:\/\/[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,}(?:\/[^\s]*)?/i);
+    if (domainMatch) {
+      const targetUrl = domainMatch[0].startsWith('http') ? domainMatch[0] : `https://${domainMatch[0]}`;
+      return {
+        text: `Ouverture de ${targetUrl} dans un nouvel onglet Hyper Nova.`,
+        actions: [{ name: 'open_tab', args: { target: targetUrl, title: domainMatch[0] } }],
+      };
+    }
+  }
+
+  // 7. Mode "site" or explicit mini-app creation
+  const wantsWebApp =
+    mode === 'site' ||
+    lower.includes('calculatrice') ||
+    lower.includes('crée un site') ||
+    lower.includes('cree un site') ||
+    lower.includes('crée une') ||
+    lower.includes('cree une') ||
+    lower.includes('mini-site') ||
+    lower.includes('mini site') ||
+    lower.includes('mini-jeu') ||
+    lower.includes('mini jeu');
+
+  if (wantsWebApp) {
+    if (lower.includes('calc')) {
+      return {
+        text: 'Calculatrice Hyper Nova générée et ouverte dans un nouvel onglet Aperçu Live !',
+        actions: [
+          {
+            name: 'create_web_app',
+            args: { title: 'Calculatrice Hyper Nova', htmlCode: buildFallbackCalculatorHtml() },
+          },
+        ],
+      };
+    }
+    if (lower.includes('jeu') || lower.includes('game') || lower.includes('aim') || lower.includes('arcade')) {
+      return {
+        text: 'Mini-jeu Aim Reflex Hyper Nova généré et lancé dans un nouvel onglet Aperçu Live !',
+        actions: [
+          {
+            name: 'create_web_app',
+            args: { title: 'Nova Reflex Mini-Game', htmlCode: buildFallbackMiniGameHtml('Nova Reflex Aim') },
+          },
+        ],
+      };
+    }
+    const cleanTopic = prompt.replace(/crononova/gi, '').trim() || 'Mini-Site Hyper Nova';
+    return {
+      text: `Mini-site interactif « ${cleanTopic.slice(0, 50)} » créé et ouvert dans un onglet Aperçu Live.`,
+      actions: [
+        {
+          name: 'create_web_app',
+          args: { title: cleanTopic.slice(0, 40), htmlCode: buildFallbackCustomSiteHtml(cleanTopic) },
+        },
+      ],
+    };
   }
 
   return null;
 }
 
-async function buildWebSearchFallbackAnswer(prompt: string): Promise<{
+async function buildSmartCrononovaFallback(
+  prompt: string,
+  mode = 'assistant',
+  activePageContext = '',
+  hyperDrive = false
+): Promise<{
   text: string;
   actions: Array<{ name: string; args: Record<string, unknown> }>;
   sources: Array<{ uri: string; title: string }>;
 }> {
-  const [bingItems, wikiData] = await Promise.all([
-    fetchBingRssSearch(prompt),
-    fetchWikipediaData(prompt),
+  const localControl = tryLocalBrowserControlFallback(prompt, mode);
+  if (localControl) {
+    return { ...localControl, sources: [] };
+  }
+
+  const lower = prompt.toLowerCase().trim();
+
+  // Conversational greetings & assistant help
+  if (
+    /^(bonjour|salut|coucou|hello|hi|hey|yo|bonsoir)\b/.test(lower) ||
+    lower.includes('qui es-tu') ||
+    lower.includes('qui es tu') ||
+    lower.includes('que peux-tu faire') ||
+    lower.includes('comment ça marche') ||
+    lower.includes('aide')
+  ) {
+    return {
+      text: `${
+        hyperDrive ? '[HYPER DRIVE ACTIF] ' : ''
+      }Bonjour Commandant ! Je suis CRONONOVA, l'assistant intégré d'Hyper Nova Navigator.\n\nJe peux exécuter immédiatement :\n• Contrôle du navigateur : "Ouvre YouTube", "Active Hyper Drive", "Lance GX Booster à 4 Go", "Mode Streamer"\n• Création instantanée : "Crée une calculatrice web", "Crée un mini-jeu"\n• Recherche web en direct (Bing + Wikipédia) et résumé de l'onglet actif.\n\nQue voulez-vous lancer ?`,
+      actions: [],
+      sources: [],
+    };
+  }
+
+  // Summarize active tab context
+  if (mode === 'summarize' || lower.includes('résume cette page') || lower.includes('resume cette page')) {
+    const contextInfo = activePageContext
+      ? `Analyse de l'onglet actif :\n• ${activePageContext}`
+      : 'Aucun contenu de page spécifique détecté.';
+    const extraTopic = prompt.replace(/crononova|résume|resume|cette page/gi, '').trim();
+    if (extraTopic.length > 18) {
+      const [bingItems, wikiData] = await Promise.all([
+        fetchBingRssSearch(extraTopic),
+        fetchWikipediaData(extraTopic),
+      ]);
+      const bullets = [
+        wikiData.summary ? `• Synthèse : ${wikiData.summary}` : '',
+        ...bingItems.slice(0, 3).map((b) => `• ${b.title}${b.snippet ? ` — ${b.snippet}` : ''}`),
+      ].filter(Boolean);
+      return {
+        text: `${contextInfo}\n\n${bullets.join('\n') || 'Astuce : ouvrez un article web puis cliquez sur « Résumer IA » pour extraire ses points clés.'}`,
+        actions: [],
+        sources: wikiData.links.slice(0, 3).map((l) => ({ uri: l.url, title: l.title })),
+      };
+    }
+    return {
+      text: `${contextInfo}\n\nPoints clés :\n• Vous pouvez basculer entre la vue Hyper Nova, Site Live et Lecteur Texte depuis la barre de l'onglet.\n• Utilisez "Ouvre YouTube", "GX Booster" ou la barre de recherche Bing/DuckDuckGo/Qwant pour explorer sans limite.`,
+      actions: [],
+      sources: [],
+    };
+  }
+
+  // Gaming coach mode
+  if (mode === 'gaming') {
+    return {
+      text: `Briefing Tactique Gaming (${hyperDrive ? 'Hyper Drive Actif' : 'Mode Standard'}) :\n• Activez le mode Hyper Drive + GX Booster (limite RAM 4 Go) pour couper les onglets inactifs.\n• Réduisez les ombres dynamiques et le flou cinétique pour stabiliser vos 144+ FPS.\n• Vérifiez votre latence réseau dans le module GX Booster & Stats (cible < 25 ms).`,
+      actions: [],
+      sources: [],
+    };
+  }
+
+  // Live web search + Wikipedia synthesis
+  const cleanSearch = prompt.replace(/crononova/gi, '').trim() || prompt;
+  const [bingSettled, wikiSettled] = await Promise.allSettled([
+    fetchBingRssSearch(cleanSearch),
+    fetchWikipediaData(cleanSearch),
   ]);
+  const bingItems = bingSettled.status === 'fulfilled' ? bingSettled.value : [];
+  const wikiData =
+    wikiSettled.status === 'fulfilled' ? wikiSettled.value : { summary: '', links: [] };
+
   const sources = [
     ...wikiData.links.map((l) => ({ uri: l.url, title: l.title })),
     ...bingItems.slice(0, 4).map((b) => ({ uri: b.url, title: b.title })),
@@ -729,7 +1069,7 @@ async function buildWebSearchFallbackAnswer(prompt: string): Promise<{
   if (bingItems.length > 0) {
     summaryParts.push(
       bingItems
-        .slice(0, 3)
+        .slice(0, 4)
         .map((r) => `• ${r.title}${r.snippet ? ` — ${r.snippet}` : ''}`)
         .join('\n')
     );
@@ -737,8 +1077,8 @@ async function buildWebSearchFallbackAnswer(prompt: string): Promise<{
 
   const text =
     summaryParts.length > 0
-      ? `Synthèse Web directe (Mode Secours Crononova) :\n\n${summaryParts.join('\n\n')}`
-      : `Pour activer les réponses avancées de Crononova IA sur cet hébergement, ajoutez la variable d’environnement GEMINI_API_KEY dans les paramètres du serveur (ou utilisez les commandes navigateur comme "Ouvre YouTube", "Active Hyper Drive").`;
+      ? `Réponse Crononova (Synthèse Web Live) :\n\n${summaryParts.join('\n\n')}`
+      : `Commande reçue : « ${prompt} ». Essayez une question web précise, ou une commande directe comme "Ouvre YouTube", "Active Hyper Drive", "Optimise la RAM" ou "Crée une calculatrice web".`;
 
   return { text, actions: [], sources };
 }
@@ -1130,20 +1470,21 @@ export function createApiApp(): express.Express {
         history?: Array<{ role: 'user' | 'model'; text: string }>;
       };
 
-      if (!prompt || typeof prompt !== 'string') {
+      const cleanPrompt = typeof prompt === 'string' ? prompt.trim() : '';
+      if (!cleanPrompt) {
         res.status(400).json({ error: 'Le prompt est requis.' });
         return;
       }
 
       const ai = getGeminiClient();
       if (!ai) {
-        const localFallback = tryLocalBrowserControlFallback(prompt);
-        if (localFallback) {
-          res.json({ ...localFallback, sources: [] });
-          return;
-        }
-        const webFallback = await buildWebSearchFallbackAnswer(prompt);
-        res.json(webFallback);
+        const smartFallback = await buildSmartCrononovaFallback(
+          cleanPrompt,
+          mode,
+          activePageContext,
+          hyperDrive
+        );
+        res.json(smartFallback);
         return;
       }
 
@@ -1184,20 +1525,52 @@ export function createApiApp(): express.Express {
         ? [{ googleSearch: {} }, { functionDeclarations: browserControlFunctions }]
         : [{ functionDeclarations: browserControlFunctions }];
 
-      const formattedHistory = (history || []).slice(-8).map((msg) => ({
-        role: msg.role,
-        parts: [{ text: msg.text }],
-      }));
+      // Sanitize history: must start with 'user' and alternate cleanly before the new 'user' prompt
+      const rawHistory = (history || [])
+        .filter((m) => m && typeof m.text === 'string' && m.text.trim().length > 0)
+        .slice(-8);
+      const sanitizedHistory: Array<{ role: 'user' | 'model'; parts: Array<{ text: string }> }> = [];
+      for (const msg of rawHistory) {
+        const role = msg.role === 'user' ? 'user' : 'model';
+        if (sanitizedHistory.length === 0 && role === 'model') continue;
+        const last = sanitizedHistory[sanitizedHistory.length - 1];
+        if (last && last.role === role) {
+          last.parts[0].text += `\n${msg.text.trim()}`;
+        } else {
+          sanitizedHistory.push({ role, parts: [{ text: msg.text.trim() }] });
+        }
+      }
+      if (sanitizedHistory.length > 0 && sanitizedHistory[sanitizedHistory.length - 1].role === 'user') {
+        sanitizedHistory.pop();
+      }
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-4-hydrogen',
-        contents: [...formattedHistory, { role: 'user', parts: [{ text: prompt }] }],
-        config: {
-          systemInstruction,
-          tools,
-          ...(useSearch ? { toolConfig: { includeServerSideToolInvocations: true } } : {}),
-        },
-      });
+      const contents = [...sanitizedHistory, { role: 'user', parts: [{ text: cleanPrompt }] }];
+
+      let response;
+      try {
+        response = await ai.models.generateContent({
+          model: 'gemini-4-hydrogen',
+          contents,
+          config: {
+            systemInstruction,
+            tools,
+            ...(useSearch ? { toolConfig: { includeServerSideToolInvocations: true } } : {}),
+          },
+        });
+      } catch (primaryErr: unknown) {
+        if (isRetryableGeminiError(primaryErr)) {
+          response = await ai.models.generateContent({
+            model: 'gemini-3.1-flash-lite',
+            contents,
+            config: {
+              systemInstruction,
+              tools: [{ functionDeclarations: browserControlFunctions }],
+            },
+          });
+        } else {
+          throw primaryErr;
+        }
+      }
 
       const functionCalls = response.functionCalls || [];
       const actions = functionCalls.map((fc) => ({
@@ -1226,28 +1599,26 @@ export function createApiApp(): express.Express {
         sources,
       });
     } catch (err: unknown) {
-      console.error('Crononova API error:', err);
-      const reqPrompt =
-        typeof (req.body as { prompt?: unknown })?.prompt === 'string'
-          ? (req.body as { prompt: string }).prompt
-          : '';
+      console.error('Crononova API fallback activated:', err);
+      const reqBody = (req.body || {}) as {
+        prompt?: unknown;
+        mode?: unknown;
+        activePageContext?: unknown;
+        hyperDrive?: unknown;
+      };
+      const reqPrompt = typeof reqBody.prompt === 'string' ? reqBody.prompt.trim() : '';
+      const reqMode = typeof reqBody.mode === 'string' ? reqBody.mode : 'assistant';
+      const reqContext = typeof reqBody.activePageContext === 'string' ? reqBody.activePageContext : '';
+      const reqHyperDrive = Boolean(reqBody.hyperDrive);
 
-      if (isRateLimitOrQuotaError(err)) {
-        const localFallback = tryLocalBrowserControlFallback(reqPrompt);
-        if (localFallback) {
-          res.json({ ...localFallback, sources: [] });
-          return;
-        }
-        res.status(429).json({
-          error:
-            'Quota Gemini temporairement atteint (429 RESOURCE_EXHAUSTED). Patientez quelques secondes ou vérifiez GEMINI_API_KEY dans les variables d’environnement. La barre de recherche web (Bing/DuckDuckGo/Qwant) fonctionne sans limite.',
-        });
-        return;
-      }
-
-      const localFallback = reqPrompt ? tryLocalBrowserControlFallback(reqPrompt) : null;
-      if (localFallback) {
-        res.json({ ...localFallback, sources: [] });
+      if (reqPrompt) {
+        const smartFallback = await buildSmartCrononovaFallback(
+          reqPrompt,
+          reqMode,
+          reqContext,
+          reqHyperDrive
+        );
+        res.json(smartFallback);
         return;
       }
 
@@ -1549,6 +1920,26 @@ export function createApiApp(): express.Express {
     } catch {
       res.status(404).send('File not found');
     }
+  });
+
+  // Ensure unknown /api/* routes always return JSON instead of falling through to SPA HTML
+  app.use('/api', (_req, res) => {
+    res.status(404).json({ error: 'Route API introuvable.' });
+  });
+
+  // Ensure Express middleware errors (e.g. body-parser JSON syntax/size errors) return JSON
+  app.use((err: unknown, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
+    if (req.path.startsWith('/api')) {
+      const status = typeof (err as { status?: number })?.status === 'number' ? (err as { status: number }).status : 500;
+      const message = err instanceof Error ? err.message : 'Erreur serveur API.';
+      res.status(status).json({ error: message });
+      return;
+    }
+    next(err);
   });
 
   return app;

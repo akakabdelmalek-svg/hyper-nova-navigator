@@ -137,27 +137,35 @@ export const NovaUniverse: React.FC<NovaUniverseProps> = ({
           <div className="absolute inset-0 bg-gradient-to-b from-[#07090E]/70 via-[#07090E]/75 to-[#07090E]" />
         </div>
 
-        <div className="relative z-10 max-w-6xl mx-auto px-6 py-10">
-          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+        <div className="relative z-10 max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
+          <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 sm:gap-8">
             <div className="max-w-2xl space-y-3">
-              <div className="text-xs font-mono-tabular tracking-wider text-cyan-300">
-                NOVA UNIVERSE · {profile.name} · {profile.rankTitle} · NIVEAU {profile.level}
+              <div className="flex items-center gap-2.5 text-[11px] sm:text-xs font-mono-tabular tracking-wider text-cyan-300">
+                <img
+                  src={profile.avatarUrl || '/src/assets/images/avatar_malek_prime_1794552117105.jpg'}
+                  alt={profile.name}
+                  referrerPolicy="no-referrer"
+                  className="w-6 h-6 rounded-md object-cover border border-cyan-500/45 shrink-0"
+                />
+                <span>
+                  NOVA UNIVERSE · {profile.name} · {profile.rankTitle} · NIVEAU {profile.level}
+                </span>
               </div>
-              <h1 className="font-display text-3xl sm:text-4xl font-bold text-slate-100 tracking-tight text-balance">
+              <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-bold text-slate-100 tracking-tight text-balance">
                 Station de Navigation Hyper Nova
               </h1>
-              <p className="text-sm text-slate-300 leading-relaxed max-w-xl">
+              <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
                 Explorez les planètes de commandement, lancez vos jeux en un clic ou pilotez le navigateur à la voix avec Crononova.
               </p>
 
               {/* Command Search / Voice Bar */}
-              <form onSubmit={handleSearch} className="pt-2 flex items-center gap-2 max-w-2xl">
-                <div className="flex items-center gap-2 flex-1 h-11 px-3 rounded-lg border border-slate-700/90 bg-[#0A0F1A]/90 focus-within:border-cyan-400 transition-colors">
+              <form onSubmit={handleSearch} className="pt-2 flex flex-wrap sm:flex-nowrap items-center gap-2 max-w-2xl">
+                <div className="flex items-center gap-2 flex-1 min-w-0 w-full sm:w-auto h-11 px-2.5 sm:px-3 rounded-lg border border-slate-700/90 bg-[#0A0F1A]/90 focus-within:border-cyan-400 transition-colors">
                   <select
                     aria-label="Moteur de recherche Nova Universe"
                     value={searchEngine}
                     onChange={(e) => onChangeSearchEngine(e.target.value as SearchEngine)}
-                    className="bg-[#11192B] border border-slate-700 rounded px-2 py-1 text-xs font-semibold text-cyan-300 focus:outline-none cursor-pointer shrink-0"
+                    className="bg-[#11192B] border border-slate-700 rounded px-1.5 sm:px-2 py-1 text-[11px] sm:text-xs font-semibold text-cyan-300 focus:outline-none cursor-pointer shrink-0"
                   >
                     <option value="bing">Bing</option>
                     <option value="duckduckgo">DuckDuckGo</option>
@@ -168,24 +176,26 @@ export const NovaUniverse: React.FC<NovaUniverseProps> = ({
                     type="text"
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
-                    placeholder={`Rechercher avec ${searchEngine === 'bing' ? 'Bing' : searchEngine === 'duckduckgo' ? 'DuckDuckGo' : 'Qwant'}, entrer une URL ou parler à Crononova...`}
-                    className="w-full bg-transparent text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
+                    placeholder={`Rechercher avec ${searchEngine === 'bing' ? 'Bing' : searchEngine === 'duckduckgo' ? 'DuckDuckGo' : 'Qwant'}, URL ou Crononova...`}
+                    className="w-full min-w-0 bg-transparent text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none"
                   />
                 </div>
-                <button
-                  type="button"
-                  onClick={onTriggerVoice}
-                  title="Commande vocale Crononova"
-                  className="flex items-center justify-center w-11 h-11 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-colors shrink-0"
-                >
-                  <Mic className="w-4 h-4" />
-                </button>
-                <button
-                  type="submit"
-                  className="h-11 px-5 rounded-lg bg-cyan-500 text-slate-950 text-xs font-bold tracking-wide hover:bg-cyan-400 transition-colors whitespace-nowrap shrink-0"
-                >
-                  Exécuter
-                </button>
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end shrink-0">
+                  <button
+                    type="button"
+                    onClick={onTriggerVoice}
+                    title="Commande vocale Crononova"
+                    className="flex items-center justify-center w-11 h-11 rounded-lg border border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20 transition-colors shrink-0"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-none h-11 px-5 rounded-lg bg-cyan-500 text-slate-950 text-xs font-bold tracking-wide hover:bg-cyan-400 transition-colors whitespace-nowrap shrink-0"
+                  >
+                    Exécuter
+                  </button>
+                </div>
               </form>
 
               {/* Quick Engine Portals inside Hyper Nova */}
@@ -217,28 +227,61 @@ export const NovaUniverse: React.FC<NovaUniverseProps> = ({
             </div>
 
             {/* Compact Live Telemetry Strip */}
-            <div className="grid grid-cols-4 gap-4 p-4 rounded-lg border border-slate-800/90 bg-[#090E18]/85 backdrop-blur-sm shrink-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 p-3.5 sm:p-4 rounded-lg border border-slate-800/90 bg-[#090E18]/85 backdrop-blur-sm shrink-0">
               <div>
                 <div className="text-[11px] text-slate-400">FPS</div>
-                <div className="font-mono-tabular text-lg font-bold text-emerald-400">{latest.fps}</div>
+                <div className="font-mono-tabular text-base sm:text-lg font-bold text-emerald-400">{latest.fps}</div>
               </div>
               <div>
                 <div className="text-[11px] text-slate-400">Ping</div>
-                <div className="font-mono-tabular text-lg font-bold text-cyan-300">{latest.ping} ms</div>
+                <div className="font-mono-tabular text-base sm:text-lg font-bold text-cyan-300">{latest.ping} ms</div>
               </div>
               <div>
                 <div className="text-[11px] text-slate-400">RAM</div>
-                <div className="font-mono-tabular text-lg font-bold text-slate-100">{latest.ramGb} Go</div>
+                <div className="font-mono-tabular text-base sm:text-lg font-bold text-slate-100">{latest.ramGb} Go</div>
               </div>
               <div>
                 <div className="text-[11px] text-slate-400">GPU</div>
-                <div className="font-mono-tabular text-lg font-bold text-violet-300">{latest.gpu}%</div>
+                <div className="font-mono-tabular text-base sm:text-lg font-bold text-violet-300">{latest.gpu}%</div>
               </div>
             </div>
           </div>
 
-          {/* Interactive Constellation & Planets Map */}
-          <div className="mt-8 relative h-[340px] rounded-xl border border-slate-800/90 bg-[#070B13]/85 overflow-hidden nova-grid-bg">
+          {/* Mobile Responsive Planets Grid (< sm) */}
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:hidden">
+            {planets.map((planet) => (
+              <button
+                key={`mob-${planet.id}`}
+                type="button"
+                onClick={() => {
+                  if (planet.target === 'crononova') {
+                    onTriggerVoice();
+                  } else {
+                    onOpenModule(planet.target, planet.label);
+                  }
+                }}
+                className={`p-3.5 rounded-xl border border-slate-800 bg-[#070B13]/90 flex items-center gap-3 text-left transition-colors hover:border-cyan-500/40 ${
+                  planet.id === 'ia' ? 'col-span-2' : ''
+                }`}
+              >
+                <div
+                  style={{ borderColor: planet.color }}
+                  className="w-11 h-11 rounded-full border-2 bg-[#0B111F] flex items-center justify-center shrink-0"
+                >
+                  <span style={{ color: planet.color }}>{planet.icon}</span>
+                </div>
+                <div className="min-w-0">
+                  <div className="font-display text-xs font-bold text-slate-100 truncate">
+                    Planète {planet.label}
+                  </div>
+                  <div className="text-[10px] text-slate-400 truncate">{planet.sector}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {/* Interactive Constellation & Planets Map (sm+ tablet/desktop) */}
+          <div className="mt-8 relative h-[340px] rounded-xl border border-slate-800/90 bg-[#070B13]/85 overflow-hidden nova-grid-bg hidden sm:block">
             {/* Constellations SVG lines & starship path */}
             <svg
               aria-hidden="true"
@@ -318,9 +361,9 @@ export const NovaUniverse: React.FC<NovaUniverseProps> = ({
       </section>
 
       {/* Portails & Modules Rapides */}
-      <section className="max-w-6xl mx-auto px-6 py-8 space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold text-slate-100">
+      <section className="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8 space-y-5 sm:space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-display text-base sm:text-lg font-bold text-slate-100">
             Portails Rapides & Systèmes de Bord
           </h2>
           <span className="text-xs text-slate-400">

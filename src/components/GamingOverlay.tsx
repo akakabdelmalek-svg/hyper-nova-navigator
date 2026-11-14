@@ -20,7 +20,7 @@ export const GamingOverlay: React.FC<GamingOverlayProps> = ({
   return (
     <aside
       aria-label="Gaming Overlay HUD"
-      className="fixed top-24 right-5 z-40 w-64 rounded-lg border border-cyan-500/40 bg-[#080C14]/90 backdrop-blur-md p-3.5 shadow-[0_12px_36px_-8px_rgba(6,182,212,0.35)]"
+      className="fixed top-28 sm:top-24 right-3 sm:right-5 left-3 sm:left-auto sm:w-64 z-40 rounded-lg border border-cyan-500/40 bg-[#080C14]/95 backdrop-blur-md p-3.5 shadow-[0_12px_36px_-8px_rgba(6,182,212,0.35)]"
     >
       <div className="flex items-center justify-between pb-2 mb-2.5 border-b border-slate-800">
         <span className="font-display text-xs font-bold tracking-wider text-cyan-300">

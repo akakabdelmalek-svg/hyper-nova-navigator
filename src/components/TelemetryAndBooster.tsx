@@ -93,20 +93,20 @@ export const TelemetryAndBooster: React.FC<TelemetryAndBoosterProps> = ({
   };
 
   return (
-    <div className="h-full overflow-y-auto p-6 lg:p-8 max-w-6xl mx-auto space-y-8">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6 sm:space-y-8">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-100">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100">
             GX Booster Hyper Nova & Statistiques Live
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Contrôle automatique des ressources RAM/CPU, mise en veille des onglets et graphiques temps réel.
           </p>
         </div>
         {statusMessage && (
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-md border border-cyan-500/40 bg-cyan-500/10 text-xs font-medium text-cyan-200">
-            <CheckCircle2 className="w-4 h-4 text-cyan-400" />
+            <CheckCircle2 className="w-4 h-4 text-cyan-400 shrink-0" />
             <span>{statusMessage}</span>
           </div>
         )}
@@ -114,8 +114,8 @@ export const TelemetryAndBooster: React.FC<TelemetryAndBoosterProps> = ({
 
       {/* GX Booster Control Console */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 p-6 rounded-xl border border-slate-800 bg-[#0D1320] space-y-6">
-          <div className="flex items-center justify-between">
+        <div className="lg:col-span-2 p-4 sm:p-6 rounded-xl border border-slate-800 bg-[#0D1320] space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-cyan-400" />
               <h2 className="font-display text-lg font-bold text-slate-100">

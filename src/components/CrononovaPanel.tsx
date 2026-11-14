@@ -145,7 +145,7 @@ export const CrononovaPanel: React.FC<CrononovaPanelProps> = ({
   return (
     <aside
       aria-label="Assistant IA Crononova"
-      className={`w-full sm:w-[430px] shrink-0 border-l flex flex-col h-full bg-[#090D16]/95 backdrop-blur-md z-30 ${
+      className={`fixed inset-0 sm:left-auto sm:w-[400px] lg:static lg:w-[420px] shrink-0 border-l flex flex-col h-full bg-[#090D16]/95 backdrop-blur-md z-40 shadow-2xl lg:shadow-none ${
         hyperDrive ? 'border-rose-500/45' : 'border-slate-800/90'
       }`}
     >
@@ -202,7 +202,7 @@ export const CrononovaPanel: React.FC<CrononovaPanelProps> = ({
       </div>
 
       {/* Messages Stream */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-4">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -289,7 +289,7 @@ export const CrononovaPanel: React.FC<CrononovaPanelProps> = ({
       {/* Input Form */}
       <form
         onSubmit={handleSubmit}
-        className="p-3 border-t border-slate-800/80 bg-[#070B13] flex items-center gap-2"
+        className="p-2.5 sm:p-3 border-t border-slate-800/80 bg-[#070B13] flex items-center gap-2"
       >
         <button
           type="button"
@@ -310,7 +310,7 @@ export const CrononovaPanel: React.FC<CrononovaPanelProps> = ({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder='Ex: "Crononova ouvre YouTube", code, traduction...'
-          className="flex-1 h-10 px-3 rounded-md border border-slate-800 bg-[#0D1320] text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+          className="flex-1 min-w-0 h-10 px-3 rounded-md border border-slate-800 bg-[#0D1320] text-sm sm:text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
         />
 
         <button

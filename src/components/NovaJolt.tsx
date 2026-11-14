@@ -321,7 +321,15 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
 
     if (selectedGame.playType === 'file_bundle' && selectedGame.packageId) {
       fetch(`/api/game-packages/${encodeURIComponent(selectedGame.packageId)}/manifest`)
-        .then((res) => (res.ok ? res.json() : null))
+        .then(async (res) => {
+          if (!res.ok) return null;
+          const raw = await res.text();
+          try {
+            return JSON.parse(raw) as PackageManifest;
+          } catch {
+            return null;
+          }
+        })
         .then((data: PackageManifest | null) => setSelectedManifest(data))
         .catch(() => setSelectedManifest(null));
     } else {
@@ -405,10 +413,19 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
       let filesPreview = '';
 
       if (playType === 'file_bundle') {
+        const parseJsonResponse = async (res: Response, fallbackMsg: string) => {
+          const raw = await res.text();
+          try {
+            return JSON.parse(raw) as Record<string, unknown>;
+          } catch {
+            throw new Error(`${fallbackMsg} (HTTP ${res.status})`);
+          }
+        };
+
         const initRes = await fetch('/api/game-packages/init', { method: 'POST' });
-        const initData = await initRes.json();
+        const initData = await parseJsonResponse(initRes, 'Échec d’initialisation du dossier.');
         if (!initRes.ok || !initData.packageId) {
-          throw new Error(initData.error || 'Échec d’initialisation du dossier.');
+          throw new Error(String(initData.error || 'Échec d’initialisation du dossier.'));
         }
 
         const pkgId = String(initData.packageId);
@@ -432,8 +449,14 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
               }
             );
             if (!uploadRes.ok) {
-              const errJson = await uploadRes.json().catch(() => ({}));
-              throw new Error(errJson.error || `Échec d’envoi pour ${item.path}`);
+              const rawErr = await uploadRes.text().catch(() => '');
+              let parsedErr = '';
+              try {
+                parsedErr = String((JSON.parse(rawErr) as { error?: unknown })?.error || '');
+              } catch {
+                // ignore HTML error text
+              }
+              throw new Error(parsedErr || `Échec d’envoi pour ${item.path} (HTTP ${uploadRes.status})`);
             }
             sentCount++;
             setUploadProgress({ sent: sentCount, total: pendingFiles.length });
@@ -448,9 +471,9 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
           `/api/game-packages/${encodeURIComponent(pkgId)}/finalize`,
           { method: 'POST' }
         );
-        const uploadData = await finRes.json();
+        const uploadData = await parseJsonResponse(finRes, 'Échec de finalisation du dossier.');
         if (!finRes.ok) {
-          throw new Error(uploadData.error || 'Échec de finalisation du dossier.');
+          throw new Error(String(uploadData.error || 'Échec de finalisation du dossier.'));
         }
 
         packageId = String(uploadData.packageId || pkgId);
@@ -611,14 +634,14 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
     .sort((a, b) => (sortBy === 'popular' ? b.likesCount + b.playsCount - (a.likesCount + a.playsCount) : 0));
 
   return (
-    <div className="h-full overflow-y-auto p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="h-full overflow-y-auto p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800/80 pb-5">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-100">
+          <h1 className="font-display text-xl sm:text-2xl font-bold text-slate-100">
             Nova Jolt — Plateforme Jeux Indépendants
           </h1>
-          <p className="text-sm text-slate-400 mt-1">
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
             Publiez vos propres jeux HTML5, builds Web ou liens téléchargeables, et jouez aux créations de la communauté.
           </p>
         </div>
@@ -673,21 +696,21 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
           ))}
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-slate-800 bg-[#080C15]">
-            <Search className="w-3.5 h-3.5 text-slate-500" />
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          <div className="flex items-center gap-2 h-9 px-3 rounded-md border border-slate-800 bg-[#080C15] flex-1 sm:flex-initial min-w-0">
+            <Search className="w-3.5 h-3.5 text-slate-500 shrink-0" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Rechercher un jeu ou @créateur..."
-              className="bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none w-48"
+              className="bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none w-full sm:w-48 min-w-0"
             />
           </div>
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'recent' | 'popular')}
-            className="h-9 px-2.5 rounded-md border border-slate-800 bg-[#0D1320] text-xs text-slate-200"
+            className="h-9 px-2.5 rounded-md border border-slate-800 bg-[#0D1320] text-xs text-slate-200 shrink-0"
           >
             <option value="recent">Plus récents</option>
             <option value="popular">Plus populaires</option>
@@ -791,10 +814,10 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
 
       {/* PUBLISH GAME MODAL */}
       {publishOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
           <form
             onSubmit={handlePublishSubmit}
-            className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-[#0B101C] p-6 space-y-5"
+            className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-[#0B101C] p-4 sm:p-6 space-y-5"
           >
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h2 className="font-display text-xl font-bold text-slate-100">
@@ -1103,32 +1126,32 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
 
       {/* GAME DETAIL MODAL (Likes, Comments, Play, Delete) */}
       {selectedGame && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-[#0B101C] overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="max-w-2xl w-full max-h-[90vh] overflow-y-auto rounded-xl border border-slate-700 bg-[#0B101C]">
             <div
-              className={`p-6 bg-gradient-to-br ${
+              className={`p-4 sm:p-6 bg-gradient-to-br ${
                 COVER_THEMES[selectedGame.coverTheme] || COVER_THEMES.cyan
               } border-b border-slate-800 flex items-start justify-between gap-4`}
             >
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs font-mono-tabular text-cyan-300">
                   {selectedGame.genre} · Créé par @{selectedGame.authorHandle}
                 </div>
-                <h2 className="font-display text-2xl font-bold text-slate-100 mt-1">
+                <h2 className="font-display text-xl sm:text-2xl font-bold text-slate-100 mt-1 break-words">
                   {selectedGame.title}
                 </h2>
-                <p className="text-sm text-slate-300 mt-1">{selectedGame.tagline}</p>
+                <p className="text-xs sm:text-sm text-slate-300 mt-1">{selectedGame.tagline}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setSelectedGame(null)}
-                className="p-1.5 rounded bg-black/30 text-slate-300 hover:text-white"
+                className="p-1.5 rounded bg-black/30 text-slate-300 hover:text-white shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
+            <div className="p-4 sm:p-6 space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap items-center gap-2.5">
                   <button
@@ -1258,12 +1281,12 @@ export const NovaJolt: React.FC<NovaJoltProps> = ({
                       value={commentDraft}
                       onChange={(e) => setCommentDraft(e.target.value)}
                       placeholder={`Commenter en tant que @${myHandle.handle}...`}
-                      className="flex-1 h-9 px-3 rounded-md border border-slate-700 bg-[#060910] text-xs text-slate-100"
+                      className="flex-1 min-w-0 h-9 px-3 rounded-md border border-slate-700 bg-[#060910] text-xs text-slate-100"
                     />
                     <button
                       type="submit"
                       disabled={!commentDraft.trim()}
-                      className="h-9 px-4 rounded-md bg-cyan-500 text-slate-950 text-xs font-bold hover:bg-cyan-400 disabled:opacity-40"
+                      className="h-9 px-3 sm:px-4 rounded-md bg-cyan-500 text-slate-950 text-xs font-bold hover:bg-cyan-400 disabled:opacity-40 shrink-0"
                     >
                       Publier
                     </button>
